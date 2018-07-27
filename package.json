@@ -1,0 +1,32 @@
+{
+  "name": "imicrobe-archiver",
+  "version": "1.0.0",
+  "description": "Publish projects to EBI and NCBI",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Matt Bomhoff",
+  "license": "MIT",
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "body-parser": "^1.18.2",
+    "cors": "^2.8.4",
+    "dateformat": "^3.0.2",
+    "express": "^4.16.2",
+    "request": "^2.87.0",
+    "request-promise": "^4.2.2",
+    "shortid": "^2.2.8",
+    "sqlite": "^2.9.0",
+    "sqlite3": "^3.1.13"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hurwitzlab/imicrobe-archiver.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hurwitzlab/imicrobe-archiver/issues"
+  },
+  "homepage": "https://github.com/hurwitzlab/imicrobe-archiver#readme"
+}
