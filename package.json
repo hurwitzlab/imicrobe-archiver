@@ -4,7 +4,7 @@
   "description": "Publish projects to EBI and NCBI",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "mocha",
     "start": "node server.js"
   },
   "author": "Matt Bomhoff",
@@ -28,5 +28,10 @@
   "bugs": {
     "url": "https://github.com/hurwitzlab/imicrobe-archiver/issues"
   },
-  "homepage": "https://github.com/hurwitzlab/imicrobe-archiver#readme"
+  "homepage": "https://github.com/hurwitzlab/imicrobe-archiver#readme",
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "chai-http": "^4.0.0",
+    "mocha": "^5.2.0"
+  }
 }
