@@ -4,9 +4,10 @@ let chai = require('chai');
 let chaiHttp = require('chai-http');
 let should = chai.should();
 
-var config = require('../config.json');
-
 chai.use(chaiHttp);
+
+var config = require('../config.json');
+var hostUrl = 'http://localhost:' + config.serverPort;
 
 describe('Array', function() {
   describe('#indexOf()', function() {
@@ -23,18 +24,30 @@ describe('Jobs', () => {
 //        });
 //    });
 
-/*
-  * Test the /GET route
-  */
   describe('/GET jobs', () => {
       it('should GET all the jobs', (done) => {
-        chai.request('http://localhost:3008')
+        chai.request(hostUrl)
             .get('/jobs')
             .set('Authorization', 'Bearer ' + config.testToken)
             .end((err, res) => {
                 res.should.have.status(200);
                 res.body.should.be.a('array');
-                res.body.length.should.be.eql(0);
+                //res.body.length.should.be.eql(0);
+              done();
+            });
+      });
+  });
+
+  describe('/POST jobs', () => {
+      it('should POST a new job', (done) => {
+        chai.request(hostUrl)
+            .post('/jobs')
+            .set('Authorization', 'Bearer ' + config.testToken)
+            .send({
+                inputs: [ '/mbomhoff/test.txt' ]
+            })
+            .end((err, res) => {
+                res.should.have.status(200);
               done();
             });
       });
