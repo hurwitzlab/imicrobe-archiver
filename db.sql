@@ -1,5 +1,5 @@
 CREATE TABLE jobs (
-    submission_id TEXT PRIMARY KEY,
+    job_id     TEXT PRIMARY KEY,
     username   TEXT NOT NULL,
     token      TEXT,
     status     TEXT NOT NULL,
