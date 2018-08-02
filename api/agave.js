@@ -10,28 +10,34 @@ class AgaveAPI {
     filesGet(remotePath, localPath) {
         var self = this;
 
-        var options = {
-            host: config.agaveConfig.baseUrl.replace(/^https?:\/\//,''), // remove protocol
-            path: "/files/v2/media/" + remotePath,
-            headers: {
-                //Accept: "application/octet-stream",
-                Authorization: self.token
-            }
-        }
-
-        var file = fs.createWriteStream(localPath);
-
         // Request file from Agave
-        try {
+        return new Promise(function(resolve, reject) {
             console.log("AgaveAPI.filesGet " + remotePath + " " + localPath);
-            https.get(options, response => {
+
+            var options = {
+                host: config.agaveConfig.baseUrl.replace(/^https?:\/\//,''), // remove protocol
+                path: "/files/v2/media/" + remotePath,
+                headers: {
+                    Authorization: self.token
+                }
+            };
+
+            var file = fs.createWriteStream(localPath);
+
+            var request = https.get(options, response => {
                 response.pipe(file);
+
+                response.on("end", function() {
+                    file.end();
+                    resolve();
+                });
             });
-        }
-        catch(error) {
-            console.log(error);
-            res.send(500, error)
-        }
+
+            request.on("error", function(error) {
+                console.log("https error:", error);
+                reject(error);
+            });
+        });
     }
 }
 

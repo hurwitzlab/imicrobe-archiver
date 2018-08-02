@@ -28,7 +28,7 @@ describe('Jobs', () => {
       it('should GET all the jobs', (done) => {
         chai.request(hostUrl)
             .get('/jobs')
-            .set('Authorization', 'Bearer ' + config.testToken)
+            .set('Authorization', 'Bearer ' + config.agaveConfig.testToken)
             .end((err, res) => {
                 res.should.have.status(200);
                 res.body.should.be.a('array');
@@ -42,9 +42,12 @@ describe('Jobs', () => {
       it('should POST a new job', (done) => {
         chai.request(hostUrl)
             .post('/jobs')
-            .set('Authorization', 'Bearer ' + config.testToken)
+            .set('Authorization', 'Bearer ' + config.agaveConfig.testToken)
             .send({
-                inputs: [ '/mbomhoff/test.txt' ]
+                inputs: [
+                    '/mbomhoff/pov_test/POV_GD.Spr.C.8m_reads.fa',
+                    '/mbomhoff/pov_test/POV_GF.Spr.C.9m_reads.fa'
+                ]
             })
             .end((err, res) => {
                 res.should.have.status(200);

@@ -10,6 +10,7 @@ const path = require('path');
 const mkdirp = require('mkdirp-promise');
 const agaveApi = require('../agave');
 const config = require('../../config.json');
+const fs = require('fs');
 
 const STATUS = {
     CREATED:         "CREATED",         // Created/queued
@@ -50,27 +51,33 @@ class Job {
 
         var ftp = new PromiseFtp();
 
-        return Promise.each(this.inputs, filepath => {
-            // Download file from Agave into temp space
-            var localPath = stagingPath + path.dirname(filepath);
-            mkdirp(localPath)
-            .then( () => {
-                var agave = new agaveApi.AgaveAPI({ token: self.token });
-                agave.filesGet(filepath, stagingPath + filepath);
-
-                // Upload file to EBI FTP
-                // TODO what if the sample files all have the same name, they will overwrite each other in FTP
-                return ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password })
-                .then(function () {
-                    console.log("FTPing file " + filepath + " to " + ebi.hostUrl);
-                    return ftp.put(filepath, path.basename(filepath));
-                }).then(function () {
-                    return ftp.end();
+        return ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password })
+            .then( serverMsg => {
+                console.log("ftp_connect:", serverMsg);
+                return Promise.each(this.inputs, filepath => {
+                    // Download file from Agave into local temp space
+                    var localPath = stagingPath + path.dirname(filepath);
+                    return mkdirp(localPath)
+                    .then( () => {
+                        var agave = new agaveApi.AgaveAPI({ token: self.token });
+                        return agave.filesGet(filepath, stagingPath + filepath);
+                    })
+                    .then( () => {
+                        // Upload file to EBI FTP
+                        // FIXME what if the sample files all have the same name, they will overwrite each other in FTP
+                        console.log("FTPing file " + filepath + " to " + ebi.hostUrl);
+                        return ftp.put(stagingPath + filepath, path.basename(filepath));
+                    });
                 })
-                .catch(console.error);
+            })
+            .then(function () {
+                return ftp.list();
+            })
+            .then(function (list) {
+                console.log(list);
+                return ftp.end();
             })
             .catch(console.error);
-        });
     }
 
 }
