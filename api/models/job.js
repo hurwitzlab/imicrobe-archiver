@@ -5,6 +5,10 @@ const execFile = require('child_process').execFile;
 const pathlib = require('path');
 const shortid = require('shortid');
 const requestp = require('request-promise');
+const PromiseFtp = require('promise-ftp');
+const path = require('path');
+const mkdirp = require('mkdirp-promise');
+const agaveApi = require('../agave');
 const config = require('../../config.json');
 
 const STATUS = {
@@ -19,7 +23,7 @@ const MAX_JOBS_RUNNING = 2;
 
 class Job {
     constructor(props) {
-        this.submission_id = props.submission_id || shortid.generate();
+        this.id = props.id || shortid.generate();
         this.username = props.username; // CyVerse username of user running the job
         this.token = props.token;
         this.startTime = props.startTime;
@@ -38,7 +42,35 @@ class Job {
     stageInputs() {
         var self = this;
 
-        //return Promise.all(promises);
+        var stagingPath = config.stagingPath + "/" + self.id;
+
+        const ebi = config.ebiConfig;
+        if (!ebi)
+            throw(new Error('Missing required EBI configuration'));
+
+        var ftp = new PromiseFtp();
+
+        return Promise.each(this.inputs, filepath => {
+            // Download file from Agave into temp space
+            var localPath = stagingPath + path.dirname(filepath);
+            mkdirp(localPath)
+            .then( () => {
+                var agave = new agaveApi.AgaveAPI({ token: self.token });
+                agave.filesGet(filepath, stagingPath + filepath);
+
+                // Upload file to EBI FTP
+                // TODO what if the sample files all have the same name, they will overwrite each other in FTP
+                return ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password })
+                .then(function () {
+                    console.log("FTPing file " + filepath + " to " + ebi.hostUrl);
+                    return ftp.put(filepath, path.basename(filepath));
+                }).then(function () {
+                    return ftp.end();
+                })
+                .catch(console.error);
+            })
+            .catch(console.error);
+        });
     }
 
 }
@@ -108,7 +140,7 @@ class JobManager {
 
     createJob(job) {
         return new Job({
-            submission_id: job.job_id,
+            id: job.job_id,
             username: job.username,
             token: job.token,
             status: job.status,
@@ -126,7 +158,7 @@ class JobManager {
             return;
         }
 
-        return this.db.addJob(job.id, job.username, job.token, job.appId, job.name, job.status, JSON.stringify(job.inputs), JSON.stringify(job.parameters));
+        return this.db.addJob(job.id, job.username, job.token, job.status, JSON.stringify(job.inputs));
     }
 
     async transitionJob(job, newStatus) {
@@ -139,12 +171,11 @@ class JobManager {
         var self = this;
 
         self.transitionJob(job, STATUS.STAGING_INPUTS)
-        .then( () => { return remote_command('mkdir -p ' + config.remoteStagingPath) })
         .then( () => { return job.stageInputs() })
-        .then( () => self.transitionJob(job, STATUS.RUNNING) )
-        .then( () => { return job.runLibra() })
-        .then( () => self.transitionJob(job, STATUS.ARCHIVING) )
-        .then( () => { return job.archive() })
+//        .then( () => self.transitionJob(job, STATUS.RUNNING) )
+//        .then( () => { return job.runLibra() })
+//        .then( () => self.transitionJob(job, STATUS.ARCHIVING) )
+//        .then( () => { return job.archive() })
         .then( () => self.transitionJob(job, STATUS.FINISHED) )
         .catch( error => {
             console.log('runJob ERROR:', error);
