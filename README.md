@@ -29,6 +29,6 @@ nodemon server.js
 For production:
 ```
 sudo npm install pm2@latest -g
-pm2 start --name occ-plan-b server.js
+pm2 start --name imicrobe-archiver server.js
 sudo pm2 startup systemd
 ```
