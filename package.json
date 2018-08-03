@@ -21,7 +21,8 @@
     "request-promise": "^4.2.2",
     "shortid": "^2.2.8",
     "sqlite": "^2.9.0",
-    "sqlite3": "^3.1.13"
+    "sqlite3": "^3.1.13",
+    "xml2js": "^0.4.19"
   },
   "repository": {
     "type": "git",

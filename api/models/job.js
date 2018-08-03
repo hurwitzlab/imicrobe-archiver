@@ -8,13 +8,16 @@ const requestp = require('request-promise');
 const PromiseFtp = require('promise-ftp');
 const path = require('path');
 const mkdirp = require('mkdirp-promise');
+const xml2js = require('xml2js');
+const fs = require('fs');
 const agaveApi = require('../agave');
 const config = require('../../config.json');
-const fs = require('fs');
 
 const STATUS = {
-    CREATED:         "CREATED",         // Created/queued
+    CREATED:         "CREATED",         // Created
+    QUEUED:          "QUEUED",          // Waiting to be processed
     STAGING_INPUTS:  "STAGING_INPUTS",  // Transferring input files to FTP
+    SUBMITTING:      "SUBMITTING",      // Submitting XML forms
     FINISHED:        "FINISHED",        // All steps finished successfully
     FAILED:          "FAILED",          // Non-zero return code from any step
     STOPPED:         "STOPPED"          // Cancelled due to server restart
@@ -80,6 +83,237 @@ class Job {
             .catch(console.error);
     }
 
+    submit() {
+        var self = this;
+
+        var ebi = config.ebiConfig;
+
+        var builder = new xml2js.Builder();
+
+        var submissionXml = builder.buildObject({
+            SUBMISSION: {
+                $: { center_name: "Hurwitz Lab" },
+                ACTIONS: {
+                    ACTION: {
+                        ADD: {}
+                    }
+                }
+            }
+        });
+
+        var projectXml = builder.buildObject({
+            PROJECT_SET: {
+                PROJECT: {
+                    $: { alias: "imicrobe_programmatic_study", center_name: "Hurwitz Lab" },
+                    TITLE: "Demonstration of Programmatic Data Submission",
+                    DESCRIPTION: "A demonstration of programmatic data submission.",
+                    SUBMISSION_PROJECT: {
+                        SEQUENCING_PROJECT: {}
+                    }
+                }
+            }
+        });
+
+        var sampleXml = builder.buildObject({
+          "SAMPLE_SET": {
+            "SAMPLE": {
+              $: { "alias": "IMICROBESAMPLE", "center_name": "Hurwitz Lab" },
+              "TITLE": "human gastric microbiota, mucosal",
+              "SAMPLE_NAME": {
+                "TAXON_ID": "1284369",
+                "SCIENTIFIC_NAME": "stomach metagenome"
+              },
+              "SAMPLE_ATTRIBUTES": {
+                "SAMPLE_ATTRIBUTE": [
+                  {
+                    "TAG": "project name",
+                    "VALUE": "imicrobe_programmatic_study"
+                  },
+                  {
+                    "TAG": "investigation type",
+                    "VALUE": "mimarks-survey"
+                  },
+                  {
+                    "TAG": "sequencing method",
+                    "VALUE": "pyrosequencing"
+                  },
+                  {
+                    "TAG": "collection date",
+                    "VALUE": "2010"
+                  },
+                  {
+                    "TAG": "host body site",
+                    "VALUE": "Mucosa of stomach"
+                  },
+                  {
+                    "TAG": "human-associated environmental package",
+                    "VALUE": "human-associated"
+                  },
+                  {
+                    "TAG": "geographic location (latitude)",
+                    "VALUE": "1.81",
+                    "UNITS": "DD"
+                  },
+                  {
+                    "TAG": "geographic location (longitude)",
+                    "VALUE": "-78.76",
+                    "UNITS": "DD"
+                  },
+                  {
+                    "TAG": "geographic location (country and/or sea)",
+                    "VALUE": "Colombia"
+                  },
+                  {
+                    "TAG": "geographic location (region and locality)",
+                    "VALUE": "Tumaco"
+                  },
+                  {
+                    "TAG": "environment (biome)",
+                    "VALUE": "coast"
+                  },
+                  {
+                    "TAG": "environment (feature)",
+                    "VALUE": "human-associated habitat"
+                  },
+                  {
+                    "TAG": "environment (material)",
+                    "VALUE": "gastric biopsy"
+                  },
+                  {
+                    "TAG": "ENA-CHECKLIST",
+                    "VALUE": "ERC000014"
+                  }
+                ]
+              }
+            }
+          }
+        });
+
+        var experimentXml = builder.buildObject({
+          "EXPERIMENT_SET": {
+            "EXPERIMENT": {
+              $: { "alias": "imicrobe_exp", "center_name": "Hurwitz Lab" },
+              "TITLE": "The 1KITE project: evolution of insects",
+              "STUDY_REF": { $: { "accession": "SRP017801" } },
+              "DESIGN": {
+                "DESIGN_DESCRIPTION": {},
+                "SAMPLE_DESCRIPTOR": { $: { "accession": "SRS462875" } },
+                "LIBRARY_DESCRIPTOR": {
+                  "LIBRARY_STRATEGY": "RNA-Seq",
+                  "LIBRARY_SOURCE": "TRANSCRIPTOMIC",
+                  "LIBRARY_SELECTION": "cDNA",
+                  "LIBRARY_LAYOUT": {
+                    "SINGLE": {}
+                  },
+                  "LIBRARY_CONSTRUCTION_PROTOCOL": "Messenger RNA (mRNA) was isolated using the Dynabeads mRNA Purification Kit (Invitrogen, Carlsbad Ca. USA) and then sheared using divalent cations at 72*C. These cleaved RNA fragments were transcribed into first-strand cDNA using II Reverse Transcriptase (Invitrogen, Carlsbad Ca. USA) and N6 primer (IDT). The second-strand cDNA was subsequently synthesized using RNase H (Invitrogen, Carlsbad Ca. USA) and DNA polymerase I (Invitrogen, Shanghai China). The double-stranded cDNA then underwent end-repair, a single `A? base addition, adapter ligati on, and size selection on anagarose gel (250 * 20 bp). At last, the product was indexed and PCR amplified to finalize the library prepration for the paired-end cDNA."
+                }
+              },
+              "PLATFORM": {
+                "ILLUMINA": { "INSTRUMENT_MODEL": "Illumina HiSeq 2000" }
+              },
+              "EXPERIMENT_ATTRIBUTES": {
+                "EXPERIMENT_ATTRIBUTE": {
+                  "TAG": "library preparation date",
+                  "VALUE": "2010-08"
+                }
+              }
+            }
+          }
+        });
+
+        var runXml = builder.buildObject({
+          "RUN_SET": {
+            "RUN": {
+              $: { "alias": "imicrobe_run", "center_name": "Hurwitz Lab" },
+              "EXPERIMENT_REF": { $: { "refname": "imicrobe_exp" } },
+              "DATA_BLOCK": {
+                "FILES": {
+                  "FILE": {
+                    $: {
+                      "filename": "POV_GD.Spr.C.8m_reads.fa",
+                      "filetype": "fastq",
+                      "checksum_method": "MD5",
+                      "checksum": "ccae9861270be267f04b45a4d90718be"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        var tmpPath = "./tmp/"; //config.stagingPath + "/" + self.id + "/";
+
+        return Promise.all([
+                writeFile(tmpPath + '__submission__.xml', submissionXml),
+                writeFile(tmpPath + '__project__.xml', projectXml),
+                writeFile(tmpPath + '__sample__.xml', sampleXml),
+                writeFile(tmpPath + '__experiment__.xml', experimentXml),
+                writeFile(tmpPath + '__run__.xml', runXml)
+            ])
+            .then(() => {
+                var options = {
+                    method: "POST",
+                    uri: ebi.submissionUrl,
+                    headers: {
+                        "Authorization": "Basic " + new Buffer(ebi.username + ":" + ebi.password).toString('base64'),
+                        "Accept": "application/xml",
+                    },
+                    formData: {
+                        SUBMISSION: {
+                            value: fs.createReadStream(tmpPath + '__submission__.xml'),
+                            options: {
+                                filename: 'SUBMISSION.xml',
+                                contentType: 'application/xml'
+                            }
+                        },
+                        PROJECT: {
+                            value: fs.createReadStream(tmpPath + '__project__.xml'),
+                            options: {
+                                filename: 'PROJECT.xml',
+                                contentType: 'application/xml'
+                            }
+                        },
+                        SAMPLE: {
+                            value: fs.createReadStream(tmpPath + '__sample__.xml'),
+                            options: {
+                                filename: 'SAMPLE.xml',
+                                contentType: 'application/xml'
+                            }
+                        },
+                        EXPERIMENT: {
+                            value: fs.createReadStream(tmpPath + '__experiment__.xml'),
+                            options: {
+                                filename: 'EXPERIMENT.xml',
+                                contentType: 'application/xml'
+                            }
+                        },
+                        RUN: {
+                            value: fs.createReadStream(tmpPath + '__run__.xml'),
+                            options: {
+                                filename: 'RUN.xml',
+                                contentType: 'application/xml'
+                            }
+                        }
+                    }
+                };
+
+                return requestp(options)
+                    .then(function (parsedBody) {
+                        console.log(parsedBody);
+                    })
+            })
+            .catch(console.error);
+    }
+}
+
+function writeFile(filepath, data) {
+    return new Promise(function(resolve, reject) {
+        fs.writeFile(filepath, data, 'UTF-8', function(err) {
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
 }
 
 class JobManager {
@@ -178,8 +412,9 @@ class JobManager {
         var self = this;
 
         self.transitionJob(job, STATUS.STAGING_INPUTS)
-        .then( () => { return job.stageInputs() })
-//        .then( () => self.transitionJob(job, STATUS.RUNNING) )
+//        .then( () => { return job.stageInputs() })
+        .then( () => self.transitionJob(job, STATUS.SUBMITTING) )
+        .then( () => { return job.submit() })
 //        .then( () => { return job.runLibra() })
 //        .then( () => self.transitionJob(job, STATUS.ARCHIVING) )
 //        .then( () => { return job.archive() })
