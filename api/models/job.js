@@ -1,5 +1,6 @@
 const dblib = require('../db.js');
 const Promise = require('bluebird');
+const sequence = require('promise-sequence');
 const spawn = require('child_process').spawnSync;
 const execFile = require('child_process').execFile;
 const pathlib = require('path');
@@ -46,32 +47,58 @@ class Job {
     stageInputs() {
         var self = this;
 
-        var stagingPath = config.stagingPath + "/" + self.id;
-
         const ebi = config.ebiConfig;
         if (!ebi)
             throw(new Error('Missing required EBI configuration'));
+
+        var stagingPath = config.stagingPath + "/" + self.id;
+
+        var inputs = this.inputs.filter(f => {
+            f = f.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
+            return /(\.fasta|\.fastq|\.fa|\.fq)$/.test(f);
+        });
+        if (inputs.length == 0)
+            throw(new Error('No FASTA or FASTQ inputs given'));
 
         var ftp = new PromiseFtp();
 
         return ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password })
             .then( serverMsg => {
                 console.log("ftp_connect:", serverMsg);
-                return Promise.each(this.inputs, filepath => {
-                    // Download file from Agave into local temp space
+
+                var p = [];
+                inputs.forEach(filepath => {
+                    // Create temp dir
                     var localPath = stagingPath + path.dirname(filepath);
-                    return mkdirp(localPath)
-                    .then( () => {
-                        var agave = new agaveApi.AgaveAPI({ token: self.token });
-                        return agave.filesGet(filepath, stagingPath + filepath);
-                    })
-                    .then( () => {
-                        // Upload file to EBI FTP
-                        // FIXME what if the sample files all have the same name, they will overwrite each other in FTP
-                        console.log("FTPing file " + filepath + " to " + ebi.hostUrl);
-                        return ftp.put(stagingPath + filepath, path.basename(filepath));
-                    });
-                })
+                    p.push( () => mkdirp(localPath) );
+
+                    // Download file from Agave into local temp space
+                    var localFile = stagingPath + filepath;
+                    var agave = new agaveApi.AgaveAPI({ token: self.token });
+                    p.push( () => agave.filesGet(filepath, localFile) );
+
+                    // Convert file to FASTQ if necessary
+                    var newFile = localFile;
+                    if (/(.fa|.fasta)$/.test(filepath)) {
+                        newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq";
+                        p.push( () => exec_cmd('perl scripts/fasta_to_fastq.pl ' + localFile + ' > ' + newFile) );
+                    }
+                    else if (/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/.test(filepath)) {
+                        newFile = newFile.replace(/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/, "") + ".fastq";
+                        p.push( () => exec_cmd('gunzip --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl > ' + newFile) );
+                    }
+                    else if (/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/.test(filepath)) {
+                        newFile = newFile.replace(/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/, "") + ".fastq";
+                        p.push( () => exec_cmd('bunzip2 --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl > ' + newFile) );
+                    }
+
+                    // Upload file to EBI FTP
+                    // FIXME what if the sample files all have the same name, they will overwrite each other in FTP
+                    p.push( () => ftp.put(newFile, path.basename(newFile)) );
+                });
+
+                return sequence.pipeline(p);
+                //return Promise.series(p);
             })
             .then(function () {
                 return ftp.list();
@@ -307,12 +334,44 @@ class Job {
     }
 }
 
+//Promise.series = (promiseArr) => {
+//  return Promise.reduce(promiseArr, (values, promise) => {
+//    return promise().then((result) => {
+//      values.push(result);
+//      return values;
+//    });
+//  }, []);
+//};
+
 function writeFile(filepath, data) {
     return new Promise(function(resolve, reject) {
         fs.writeFile(filepath, data, 'UTF-8', function(err) {
             if (err) reject(err);
             else resolve(data);
         });
+    });
+}
+
+function exec_cmd(cmd_str) {
+    console.log("Executing command:", cmd_str);
+
+    return new Promise(function(resolve, reject) {
+        const child = execFile(
+            cmd_str, [],
+            {}, //{ maxBuffer: 10 * 1024 * 1024 }, // 10mb -- was overrunning with default 200kb
+            (error, stdout, stderr) => {
+                console.log('remote_command:stdout:', stdout);
+                console.log('remote_command:stderr:', stderr);
+
+                if (error) {
+                    console.log('remote_command:error:', error);
+                    reject(error);
+                }
+                else {
+                    resolve(stdout);
+                }
+            }
+        );
     });
 }
 
@@ -412,9 +471,9 @@ class JobManager {
         var self = this;
 
         self.transitionJob(job, STATUS.STAGING_INPUTS)
-//        .then( () => { return job.stageInputs() })
-        .then( () => self.transitionJob(job, STATUS.SUBMITTING) )
-        .then( () => { return job.submit() })
+        .then( () => { return job.stageInputs() })
+//        .then( () => self.transitionJob(job, STATUS.SUBMITTING) )
+//        .then( () => { return job.submit() })
 //        .then( () => { return job.runLibra() })
 //        .then( () => self.transitionJob(job, STATUS.ARCHIVING) )
 //        .then( () => { return job.archive() })
