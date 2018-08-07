@@ -2,7 +2,7 @@ const dblib = require('../db.js');
 const Promise = require('bluebird');
 const sequence = require('promise-sequence');
 const spawn = require('child_process').spawnSync;
-const execFile = require('child_process').execFile;
+const exec = require('child_process').exec;
 const pathlib = require('path');
 const shortid = require('shortid');
 const requestp = require('request-promise');
@@ -356,15 +356,13 @@ function exec_cmd(cmd_str) {
     console.log("Executing command:", cmd_str);
 
     return new Promise(function(resolve, reject) {
-        const child = execFile(
-            cmd_str, [],
-            {}, //{ maxBuffer: 10 * 1024 * 1024 }, // 10mb -- was overrunning with default 200kb
+        const child = exec(cmd_str,
             (error, stdout, stderr) => {
-                console.log('remote_command:stdout:', stdout);
-                console.log('remote_command:stderr:', stderr);
+                console.log('exec:stdout:', stdout);
+                console.log('exec:stderr:', stderr);
 
                 if (error) {
-                    console.log('remote_command:error:', error);
+                    console.log('exec:error:', error);
                     reject(error);
                 }
                 else {
