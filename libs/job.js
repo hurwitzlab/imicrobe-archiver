@@ -1,4 +1,4 @@
-const dblib = require('../db.js');
+const dblib = require('./db.js');
 const Promise = require('bluebird');
 const sequence = require('promise-sequence');
 const spawn = require('child_process').spawnSync;
@@ -11,8 +11,8 @@ const path = require('path');
 const mkdirp = require('mkdirp-promise');
 const xml2js = require('xml2js');
 const fs = require('fs');
-const agaveApi = require('../agave');
-const config = require('../../config.json');
+const agaveApi = require('../libs/agave');
+const config = require('../config.json');
 
 const STATUS = {
     CREATED:         "CREATED",         // Created
@@ -94,11 +94,13 @@ class Job {
 
                     // Upload file to EBI FTP
                     // FIXME what if the sample files all have the same name, they will overwrite each other in FTP
-                    p.push( () => ftp.put(newFile, path.basename(newFile)) );
+                    p.push( () => {
+                        console.log("FTPing", newFile);
+                        return ftp.put(newFile, path.basename(newFile))
+                    });
                 });
 
                 return sequence.pipeline(p);
-                //return Promise.series(p);
             })
             .then(function () {
                 return ftp.list();
@@ -271,7 +273,7 @@ class Job {
 
         var tmpPath = "./tmp/"; //config.stagingPath + "/" + self.id + "/";
 
-        return Promise.all([
+        return Promise.all([ // Is there a way to stream these XML docs from memory instead of writing to file first?
                 writeFile(tmpPath + '__submission__.xml', submissionXml),
                 writeFile(tmpPath + '__project__.xml', projectXml),
                 writeFile(tmpPath + '__sample__.xml', sampleXml),
@@ -333,15 +335,6 @@ class Job {
             .catch(console.error);
     }
 }
-
-//Promise.series = (promiseArr) => {
-//  return Promise.reduce(promiseArr, (values, promise) => {
-//    return promise().then((result) => {
-//      values.push(result);
-//      return values;
-//    });
-//  }, []);
-//};
 
 function writeFile(filepath, data) {
     return new Promise(function(resolve, reject) {
