@@ -1,4 +1,4 @@
-const dblib = require('../models/db.js');
+const dblib = require('../models/local/db.js');
 const Promise = require('bluebird');
 const sequence = require('promise-sequence');
 const spawn = require('child_process').spawnSync;

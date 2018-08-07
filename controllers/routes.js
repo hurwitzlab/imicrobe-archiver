@@ -1,9 +1,11 @@
 'use strict';
 
-const job  = require('../libs/job');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const requestp = require('request-promise');
+const job  = require('../libs/job');
+const sequelize = require('../config/mysql').sequelize;
+const models = require('../models/imicrobe/index');
 const config = require('../config.json');
 
 // Create error types
