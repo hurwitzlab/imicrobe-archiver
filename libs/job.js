@@ -1,4 +1,4 @@
-const dblib = require('./db.js');
+const dblib = require('../models/db.js');
 const Promise = require('bluebird');
 const sequence = require('promise-sequence');
 const spawn = require('child_process').spawnSync;
@@ -11,7 +11,7 @@ const path = require('path');
 const mkdirp = require('mkdirp-promise');
 const xml2js = require('xml2js');
 const fs = require('fs');
-const agaveApi = require('../libs/agave');
+const agaveApi = require('./agave');
 const config = require('../config.json');
 
 const STATUS = {

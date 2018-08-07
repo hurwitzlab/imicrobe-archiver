@@ -1,6 +1,6 @@
 'use strict';
 
-const job  = require('./models/job');
+const job  = require('../libs/job');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const requestp = require('request-promise');
@@ -84,10 +84,6 @@ module.exports = function(app, jobManager) {
     });
 
     app.post('/jobs', async (request, response) => {
-        var projectId = req.body.project_id;
-
-
-
         var j = new job.Job(request.body);
         j.username = request.auth.profile.username;
         j.token = request.auth.profile.token;

@@ -2,7 +2,7 @@
 
 var cluster = require('cluster');
 var express = require('express');
-const job = require('./api/models/job');
+const job = require('./libs/job');
 
 // Load config file
 var config = require('./config.json');
@@ -10,7 +10,7 @@ var config = require('./config.json');
 // Spawn workers and start server
 var app = express();
 var jobManager = new job.JobManager({ isMaster: cluster.isMaster });
-require('./api/routes.js')(app, jobManager);
+require('./controllers/routes.js')(app, jobManager);
 
 var workers = process.env.WORKERS || require('os').cpus().length;
 
