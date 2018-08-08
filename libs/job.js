@@ -12,6 +12,8 @@ const mkdirp = require('mkdirp-promise');
 const xml2js = require('xml2js');
 const fs = require('fs');
 const agaveApi = require('./agave');
+const sequelize = require('../config/mysql').sequelize;
+const models = require('../models/imicrobe/index');
 const config = require('../config.json');
 
 const STATUS = {
@@ -29,11 +31,11 @@ const MAX_JOBS_RUNNING = 2;
 class Job {
     constructor(props) {
         this.id = props.id || shortid.generate();
+        this.projectId = props.projectId;
         this.username = props.username; // CyVerse username of user running the job
         this.token = props.token;
         this.startTime = props.startTime;
         this.endTime = props.endTime;
-        this.inputs = props.inputs || {};
         this.status = props.status || STATUS.CREATED;
     }
 
@@ -53,18 +55,24 @@ class Job {
 
         var stagingPath = config.stagingPath + "/" + self.id;
 
-        var inputs = this.inputs.filter(f => {
-            f = f.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
-            return /(\.fasta|\.fastq|\.fa|\.fq)$/.test(f);
-        });
-        if (inputs.length == 0)
-            throw(new Error('No FASTA or FASTQ inputs given'));
-
         var ftp = new PromiseFtp();
 
         return ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password })
             .then( serverMsg => {
                 console.log("ftp_connect:", serverMsg);
+                return models.getProject(self.projectId);
+            })
+            .then( project => {
+                var inputs = project.samples
+                    .reduce((acc, s) => acc.concat(s.sample_files), [])
+                    .map(f => f.file)
+                    .filter(f => {
+                        f = f.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
+                        return /(\.fasta|\.fastq|\.fa|\.fq)$/.test(f);
+                    });
+                if (inputs.length == 0)
+                    throw(new Error('No FASTA or FASTQ inputs given'));
+                console.log("Files:", inputs);
 
                 var p = [];
                 inputs.forEach(filepath => {
@@ -432,10 +440,10 @@ class JobManager {
     createJob(job) {
         return new Job({
             id: job.job_id,
+            projectId: job.project_id,
             username: job.username,
             token: job.token,
             status: job.status,
-            inputs: JSON.parse(job.inputs),
             startTime: job.start_time,
             endTime: job.end_time
         });
@@ -449,7 +457,7 @@ class JobManager {
             return;
         }
 
-        return this.db.addJob(job.id, job.username, job.token, job.status, JSON.stringify(job.inputs));
+        return this.db.addJob(job.id, job.projectId, job.username, job.token, job.status);
     }
 
     async transitionJob(job, newStatus) {

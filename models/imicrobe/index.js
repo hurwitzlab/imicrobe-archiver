@@ -158,3 +158,22 @@ models.sample_attr_type.belongsTo(models.sample_attr_type_category, { foreignKey
 //// app_result <-> app_data_type
 //models.app_data_type.hasMany(models.app_result, { foreignKey: 'app_data_type_id'} );
 //models.app_result.belongsTo(models.app_data_type, { foreignKey: 'app_data_type_id'} );
+
+
+models.getProject = function(projectId) {
+    return models.project.findOne({
+        where: { project_id: projectId },
+        include: [
+            { model: models.sample,
+              include: [
+                { model: models.sample_file,
+                  include: [
+                    { model: models.sample_file_type
+                    }
+                  ]
+                }
+              ]
+            }
+        ]
+    });
+}

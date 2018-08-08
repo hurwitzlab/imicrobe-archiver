@@ -44,10 +44,7 @@ describe('Jobs', () => {
             .post('/jobs')
             .set('Authorization', 'Bearer ' + config.agaveConfig.testToken)
             .send({
-                inputs: [
-                    '/mbomhoff/pov_test/POV_GD.Spr.C.8m_reads.fa',
-                    '/mbomhoff/pov_test/POV_GF.Spr.C.9m_reads.fa'
-                ]
+                projectId: 273
             })
             .end((err, res) => {
                 res.should.have.status(200);

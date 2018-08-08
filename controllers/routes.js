@@ -4,8 +4,6 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const requestp = require('request-promise');
 const job  = require('../libs/job');
-const sequelize = require('../config/mysql').sequelize;
-const models = require('../models/imicrobe/index');
 const config = require('../config.json');
 
 // Create error types
@@ -33,13 +31,6 @@ module.exports = function(app, jobManager) {
         requireAuth(request);
 
         var jobs = await jobManager.getJobs(request.auth.profile.username);
-        if (jobs) {
-            jobs = jobs.map(j => {
-                j.inputs = arrayify(j.inputs);
-                //j.owner = j.username;
-                return j;
-            });
-        }
 
         response.json({
             status: "success",
@@ -47,7 +38,6 @@ module.exports = function(app, jobManager) {
         });
     });
 
-//    app.get('/jobs/:id(\\S+)', async (request, response) => {
     app.get('/jobs/:id([\\w\\-]+)', async (request, response) => {
         requireAuth(request);
 
@@ -56,8 +46,6 @@ module.exports = function(app, jobManager) {
             if (!job)
                 throw(ERR_NOT_FOUND);
 
-            job.inputs = arrayify(job.inputs);
-            //job.owner = job.username;
             response.json({
                 status: "success",
                 result: job

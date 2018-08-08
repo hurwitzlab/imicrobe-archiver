@@ -15,24 +15,24 @@ class Database {
     }
 
     getJob(jobId) {
-        return sqlite.get("SELECT job_id, username, token, status, inputs, start_time, end_time FROM jobs WHERE job_id=?", jobId);
+        return sqlite.get("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE job_id=?", jobId);
     }
 
     getJobs() {
-        return sqlite.all("SELECT job_id, username, token, status, inputs, start_time, end_time FROM jobs");
+        return sqlite.all("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs");
     }
 
     getJobsForUser(username) {
-        return sqlite.all("SELECT job_id, username, token, status, inputs, start_time, end_time FROM jobs WHERE username=?", username);
+        return sqlite.all("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE username=?", username);
     }
 
     getActiveJobs() {
-        return sqlite.all("SELECT job_id, username, token, status, inputs, start_time, end_time FROM jobs WHERE status NOT IN ('STOPPED', 'FINISHED', 'FAILED')");
+        return sqlite.all("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE status NOT IN ('STOPPED', 'FINISHED', 'FAILED')");
     }
 
-    addJob(job_id, username, token, status, inputs) {
+    addJob(job_id, project_id, username, token, status) {
         var start_time = getTimestamp();
-        return sqlite.run("INSERT INTO jobs (job_id, username, token, status, inputs, start_time) VALUES (?,?,?,?,?,?)", [job_id, username, token, status, inputs, start_time]);
+        return sqlite.run("INSERT INTO jobs (job_id, project_id, username, token, status, start_time) VALUES (?,?,?,?,?,?)", [job_id, project_id, username, token, status, start_time]);
     }
 
     updateJob(job_id, status, isEnded) {
