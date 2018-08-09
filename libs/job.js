@@ -63,19 +63,20 @@ class Job {
                 return models.getProject(self.projectId);
             })
             .then( project => {
-                var inputs = project.samples
+                var files = project.samples
                     .reduce((acc, s) => acc.concat(s.sample_files), [])
-                    .map(f => f.file)
                     .filter(f => {
-                        f = f.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
-                        return /(\.fasta|\.fastq|\.fa|\.fq)$/.test(f);
+                        var file = f.file.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
+                        return /(\.fasta|\.fastq|\.fa|\.fq)$/.test(file);
                     });
-                if (inputs.length == 0)
+                if (files.length == 0)
                     throw(new Error('No FASTA or FASTQ inputs given'));
-                console.log("Files:", inputs);
+                console.log("Files:", files.map(f => f.file));
 
                 var p = [];
-                inputs.forEach(filepath => {
+                files.forEach(f => {
+                    var filepath = f.file.replace("/iplant/home", "");
+
                     // Create temp dir
                     var localPath = stagingPath + path.dirname(filepath);
                     p.push( () => mkdirp(localPath) );
@@ -84,20 +85,21 @@ class Job {
                     var localFile = stagingPath + filepath;
                     var agave = new agaveApi.AgaveAPI({ token: self.token });
                     p.push( () => agave.filesGet(filepath, localFile) );
+                    //FIXME Agave error json response needs to be detected
 
                     // Convert file to FASTQ if necessary
                     var newFile = localFile;
                     if (/(.fa|.fasta)$/.test(filepath)) {
-                        newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq";
-                        p.push( () => exec_cmd('perl scripts/fasta_to_fastq.pl ' + localFile + ' > ' + newFile) );
+                        newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('perl scripts/fasta_to_fastq.pl ' + localFile + ' | gzip --stdout > ' + newFile) );
                     }
                     else if (/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/.test(filepath)) {
-                        newFile = newFile.replace(/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/, "") + ".fastq";
-                        p.push( () => exec_cmd('gunzip --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl > ' + newFile) );
+                        newFile = newFile.replace(/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('gunzip --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + newFile) );
                     }
                     else if (/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/.test(filepath)) {
-                        newFile = newFile.replace(/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/, "") + ".fastq";
-                        p.push( () => exec_cmd('bunzip2 --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl > ' + newFile) );
+                        newFile = newFile.replace(/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('bunzip2 --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + newFile) );
                     }
 
                     // Upload file to EBI FTP
@@ -110,7 +112,7 @@ class Job {
 
                 return sequence.pipeline(p);
             })
-            .then(function () {
+            .then(function () { // for debug
                 return ftp.list();
             })
             .then(function (list) {
