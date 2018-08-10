@@ -7,6 +7,7 @@ const pathlib = require('path');
 const shortid = require('shortid');
 const requestp = require('request-promise');
 const PromiseFtp = require('promise-ftp');
+const md5File = require('md5-file/promise')
 const path = require('path');
 const mkdirp = require('mkdirp-promise');
 const xml2js = require('xml2js');
@@ -18,6 +19,7 @@ const config = require('../config.json');
 
 const STATUS = {
     CREATED:         "CREATED",         // Created
+    INITIALIZING:    "INITIALIZING",    // Initializing
     QUEUED:          "QUEUED",          // Waiting to be processed
     STAGING_INPUTS:  "STAGING_INPUTS",  // Transferring input files to FTP
     SUBMITTING:      "SUBMITTING",      // Submitting XML forms
@@ -46,6 +48,15 @@ class Job {
         this.status = newStatus;
     }
 
+    init() {
+        var self = this;
+
+        return models.getProject(self.projectId)
+            .then(project => {
+                self.project = project;
+            });
+    }
+
     stageInputs() {
         var self = this;
 
@@ -60,10 +71,8 @@ class Job {
         return ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password })
             .then( serverMsg => {
                 console.log("ftp_connect:", serverMsg);
-                return models.getProject(self.projectId);
-            })
-            .then( project => {
-                var files = project.samples
+
+                var files = self.project.samples
                     .reduce((acc, s) => acc.concat(s.sample_files), [])
                     .filter(f => {
                         var file = f.file.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
@@ -73,8 +82,10 @@ class Job {
                     throw(new Error('No FASTA or FASTQ inputs given'));
                 console.log("Files:", files.map(f => f.file));
 
+                self.files = files;
+
                 var p = [];
-                files.forEach(f => {
+                self.files.forEach(f => {
                     var filepath = f.file.replace("/iplant/home", "");
 
                     // Create temp dir
@@ -90,17 +101,24 @@ class Job {
                     // Convert file to FASTQ if necessary
                     var newFile = localFile;
                     if (/(.fa|.fasta)$/.test(filepath)) {
-                        newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq.gz";
-                        p.push( () => exec_cmd('perl scripts/fasta_to_fastq.pl ' + localFile + ' | gzip --stdout > ' + newFile) );
+                        f.dataValues.newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('perl scripts/fasta_to_fastq.pl ' + localFile + ' | gzip --stdout > ' + f.dataValues.newFile) );
                     }
                     else if (/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/.test(filepath)) {
-                        newFile = newFile.replace(/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/, "") + ".fastq.gz";
-                        p.push( () => exec_cmd('gunzip --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + newFile) );
+                        f.dataValues.newFile = newFile.replace(/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('gunzip --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + f.dataValues.newFile) );
                     }
                     else if (/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/.test(filepath)) {
-                        newFile = newFile.replace(/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/, "") + ".fastq.gz";
-                        p.push( () => exec_cmd('bunzip2 --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + newFile) );
+                        f.dataValues.newFile = newFile.replace(/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('bunzip2 --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + f.dataValues.newFile) );
                     }
+
+                    p.push( () => {
+                        md5File(newFile).then(hash => {
+                          console.log("MD5 sum:", hash);
+                          f.dataValues.md5sum = hash;
+                        })
+                    })
 
                     // Upload file to EBI FTP
                     // FIXME what if the sample files all have the same name, they will overwrite each other in FTP
@@ -131,7 +149,7 @@ class Job {
 
         var submissionXml = builder.buildObject({
             SUBMISSION: {
-                $: { center_name: "Hurwitz Lab" },
+                $: { center_name: "Hurwitz Lab" }, // FIXME
                 ACTIONS: {
                     ACTION: {
                         ADD: {}
@@ -140,12 +158,13 @@ class Job {
             }
         });
 
+        var projectAlias = "project_" + (self.project.project_code ? self.project.project_code : self.project.project_id) + "_" + self.id;
         var projectXml = builder.buildObject({
             PROJECT_SET: {
                 PROJECT: {
-                    $: { alias: "imicrobe_programmatic_study", center_name: "Hurwitz Lab" },
-                    TITLE: "Demonstration of Programmatic Data Submission",
-                    DESCRIPTION: "A demonstration of programmatic data submission.",
+                    $: { alias: projectAlias, center_name: "Hurwitz Lab" }, // FIXME
+                    TITLE: self.project.project_name,
+                    DESCRIPTION: self.project.description,
                     SUBMISSION_PROJECT: {
                         SEQUENCING_PROJECT: {}
                     }
@@ -153,133 +172,43 @@ class Job {
             }
         });
 
-        var sampleXml = builder.buildObject({
-          "SAMPLE_SET": {
-            "SAMPLE": {
-              $: { "alias": "IMICROBESAMPLE", "center_name": "Hurwitz Lab" },
-              "TITLE": "human gastric microbiota, mucosal",
-              "SAMPLE_NAME": {
-                "TAXON_ID": "1284369",
-                "SCIENTIFIC_NAME": "stomach metagenome"
-              },
-              "SAMPLE_ATTRIBUTES": {
-                "SAMPLE_ATTRIBUTE": [
-                  {
-                    "TAG": "project name",
-                    "VALUE": "imicrobe_programmatic_study"
-                  },
-                  {
-                    "TAG": "investigation type",
-                    "VALUE": "mimarks-survey"
-                  },
-                  {
-                    "TAG": "sequencing method",
-                    "VALUE": "pyrosequencing"
-                  },
-                  {
-                    "TAG": "collection date",
-                    "VALUE": "2010"
-                  },
-                  {
-                    "TAG": "host body site",
-                    "VALUE": "Mucosa of stomach"
-                  },
-                  {
-                    "TAG": "human-associated environmental package",
-                    "VALUE": "human-associated"
-                  },
-                  {
-                    "TAG": "geographic location (latitude)",
-                    "VALUE": "1.81",
-                    "UNITS": "DD"
-                  },
-                  {
-                    "TAG": "geographic location (longitude)",
-                    "VALUE": "-78.76",
-                    "UNITS": "DD"
-                  },
-                  {
-                    "TAG": "geographic location (country and/or sea)",
-                    "VALUE": "Colombia"
-                  },
-                  {
-                    "TAG": "geographic location (region and locality)",
-                    "VALUE": "Tumaco"
-                  },
-                  {
-                    "TAG": "environment (biome)",
-                    "VALUE": "coast"
-                  },
-                  {
-                    "TAG": "environment (feature)",
-                    "VALUE": "human-associated habitat"
-                  },
-                  {
-                    "TAG": "environment (material)",
-                    "VALUE": "gastric biopsy"
-                  },
-                  {
-                    "TAG": "ENA-CHECKLIST",
-                    "VALUE": "ERC000014"
+        var sampleSetObj = { SAMPLE_SET: [] };
+
+        var samplesByAlias = {};
+
+        self.project.samples.forEach(sample => {
+            var sampleAlias = "sample_"  + (sample.sample_acc ? sample.sample_acc : sample.sample_id) + "_" + self.id;
+            samplesByAlias[sampleAlias] = sample;
+            var sampleObj = {
+                SAMPLE: {
+                  $: { alias: sampleAlias, center_name: "Hurwitz Lab" }, // FIXME
+                  TITLE: sample.sample_title,
+                  SAMPLE_NAME: {
+                    TAXON_ID: "1284369", // FIXME
+                    SCIENTIFIC_NAME: "stomach metagenome" // FIXME
                   }
-                ]
-              }
-            }
-          }
-        });
-
-        var experimentXml = builder.buildObject({
-          "EXPERIMENT_SET": {
-            "EXPERIMENT": {
-              $: { "alias": "imicrobe_exp", "center_name": "Hurwitz Lab" },
-              "TITLE": "The 1KITE project: evolution of insects",
-              "STUDY_REF": { $: { "accession": "SRP017801" } },
-              "DESIGN": {
-                "DESIGN_DESCRIPTION": {},
-                "SAMPLE_DESCRIPTOR": { $: { "accession": "SRS462875" } },
-                "LIBRARY_DESCRIPTOR": {
-                  "LIBRARY_STRATEGY": "RNA-Seq",
-                  "LIBRARY_SOURCE": "TRANSCRIPTOMIC",
-                  "LIBRARY_SELECTION": "cDNA",
-                  "LIBRARY_LAYOUT": {
-                    "SINGLE": {}
-                  },
-                  "LIBRARY_CONSTRUCTION_PROTOCOL": "Messenger RNA (mRNA) was isolated using the Dynabeads mRNA Purification Kit (Invitrogen, Carlsbad Ca. USA) and then sheared using divalent cations at 72*C. These cleaved RNA fragments were transcribed into first-strand cDNA using II Reverse Transcriptase (Invitrogen, Carlsbad Ca. USA) and N6 primer (IDT). The second-strand cDNA was subsequently synthesized using RNase H (Invitrogen, Carlsbad Ca. USA) and DNA polymerase I (Invitrogen, Shanghai China). The double-stranded cDNA then underwent end-repair, a single `A? base addition, adapter ligati on, and size selection on anagarose gel (250 * 20 bp). At last, the product was indexed and PCR amplified to finalize the library prepration for the paired-end cDNA."
                 }
-              },
-              "PLATFORM": {
-                "ILLUMINA": { "INSTRUMENT_MODEL": "Illumina HiSeq 2000" }
-              },
-              "EXPERIMENT_ATTRIBUTES": {
-                "EXPERIMENT_ATTRIBUTE": {
-                  "TAG": "library preparation date",
-                  "VALUE": "2010-08"
-                }
-              }
-            }
-          }
-        });
+            };
 
-        var runXml = builder.buildObject({
-          "RUN_SET": {
-            "RUN": {
-              $: { "alias": "imicrobe_run", "center_name": "Hurwitz Lab" },
-              "EXPERIMENT_REF": { $: { "refname": "imicrobe_exp" } },
-              "DATA_BLOCK": {
-                "FILES": {
-                  "FILE": {
-                    $: {
-                      "filename": "POV_GD.Spr.C.8m_reads.fa",
-                      "filetype": "fastq",
-                      "checksum_method": "MD5",
-                      "checksum": "ccae9861270be267f04b45a4d90718be"
+            var attributesObj = sample.sample_attrs.map(attr => {
+                return {
+                    SAMPLE_ATTRIBUTE: {
+                        TAG: attr.sample_attr_type.type,
+                        VALUE: attr.attr_value
                     }
-                  }
                 }
-              }
-            }
-          }
+            });
+
+            sampleObj.SAMPLE.SAMPLE_ATTRIBUTES = attributesObj;
+
+            sampleSetObj.SAMPLE_SET.push(sampleObj);
         });
+
+        var sampleXml = builder.buildObject(sampleSetObj);
+
+        console.log(submissionXml);
+        console.log(projectXml);
+        console.log(sampleXml);
 
         var tmpPath = "./tmp/"; //config.stagingPath + "/" + self.id + "/";
 
@@ -287,8 +216,6 @@ class Job {
                 writeFile(tmpPath + '__submission__.xml', submissionXml),
                 writeFile(tmpPath + '__project__.xml', projectXml),
                 writeFile(tmpPath + '__sample__.xml', sampleXml),
-                writeFile(tmpPath + '__experiment__.xml', experimentXml),
-                writeFile(tmpPath + '__run__.xml', runXml)
             ])
             .then(() => {
                 var options = {
@@ -320,30 +247,148 @@ class Job {
                                 contentType: 'application/xml'
                             }
                         },
-                        EXPERIMENT: {
-                            value: fs.createReadStream(tmpPath + '__experiment__.xml'),
-                            options: {
-                                filename: 'EXPERIMENT.xml',
-                                contentType: 'application/xml'
-                            }
-                        },
-                        RUN: {
-                            value: fs.createReadStream(tmpPath + '__run__.xml'),
-                            options: {
-                                filename: 'RUN.xml',
-                                contentType: 'application/xml'
-                            }
-                        }
                     }
                 };
 
                 return requestp(options)
                     .then(function (parsedBody) {
                         console.log(parsedBody);
+                        return xmlToObj(parsedBody);
+                    })
+                    .then(function (response) {
+                        console.log(response);
+
+                        var experimentSetObj = { EXPERIMENT_SET: [] };
+                        var runSetObj = { RUN_SET: [] };
+
+                        response.RECEIPT.SAMPLE.forEach(sampleRes => {
+                            var sampleAccession = sampleRes.$.accession;
+                            var sampleAlias = sampleRes.$.alias;
+                            var sample = samplesByAlias[sampleAlias];
+
+                            var projectAccession = response.RECEIPT.PROJECT[0].$.accession;
+
+                            var experimentAlias = "experiment_" + sample.sample_id + "_" + self.id;
+                            var experimentObj = {
+                                EXPERIMENT: {
+                                  $: { alias: experimentAlias, center_name: "Hurwitz Lab" }, // FIXME
+                                  TITLE: "",
+                                  STUDY_REF: { $: { accession: projectAccession } },
+                                  DESIGN: {
+                                    DESIGN_DESCRIPTION: {},
+                                    SAMPLE_DESCRIPTOR: { $: { accession: sampleAccession } },
+                                    LIBRARY_DESCRIPTOR: {
+                                      LIBRARY_STRATEGY: "RNA-Seq", // FIXME
+                                      LIBRARY_SOURCE: "TRANSCRIPTOMIC", // FIXME
+                                      LIBRARY_SELECTION: "cDNA", // FIXME
+                                      LIBRARY_LAYOUT: {
+                                        SINGLE: {} // FIXME
+                                      },
+//                                      LIBRARY_CONSTRUCTION_PROTOCOL: "Messenger RNA (mRNA) was isolated using the Dynabeads mRNA Purification Kit (Invitrogen, Carlsbad Ca. USA) and then sheared using divalent cations at 72*C. These cleaved RNA fragments were transcribed into first-strand cDNA using II Reverse Transcriptase (Invitrogen, Carlsbad Ca. USA) and N6 primer (IDT). The second-strand cDNA was subsequently synthesized using RNase H (Invitrogen, Carlsbad Ca. USA) and DNA polymerase I (Invitrogen, Shanghai China). The double-stranded cDNA then underwent end-repair, a single `A? base addition, adapter ligati on, and size selection on anagarose gel (250 * 20 bp). At last, the product was indexed and PCR amplified to finalize the library prepration for the paired-end cDNA."
+                                    }
+                                  },
+                                  PLATFORM: {
+                                    ILLUMINA: { INSTRUMENT_MODEL: "Illumina HiSeq 2000" }
+                                  },
+                //                  EXPERIMENT_ATTRIBUTES: {
+                //                    EXPERIMENT_ATTRIBUTE: {
+                //                      TAG: "library preparation date",
+                //                      VALUE: "2010-08"
+                //                    }
+                //                  }
+                                }
+                            };
+
+                            var runsObj = [];
+                            self.files.forEach(file => {
+                                var runAlias = "run_" + sample.sample_id + "_" + runsObj.length + "_" + self.id;
+                                runsObj.push({
+                                    RUN: {
+                                      $: { alias: runAlias, center_name: "Hurwitz Lab" }, // FIXME
+                                      EXPERIMENT_REF: { $: { refname: experimentAlias } },
+                                      DATA_BLOCK: {
+                                        FILES: {
+                                          FILE: {
+                                            $: {
+                                              filename: path.basename(file.get().newFile),
+                                              filetype: "fastq",
+                                              checksum_method: "MD5",
+                                              checksum: file.get().md5sum
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                });
+                            });
+
+                            experimentSetObj.EXPERIMENT_SET.push(experimentObj);
+                            runSetObj.RUN_SET = runsObj;
+                        });
+
+                        var experimentXml = builder.buildObject(experimentSetObj);
+                        var runXml = builder.buildObject(runSetObj);
+
+                        console.log(experimentXml);
+                        console.log(runXml);
+                        return Promise.all([
+                            writeFile(tmpPath + '__experiment__.xml', experimentXml),
+                            writeFile(tmpPath + '__run__.xml', runXml)
+                        ]);
+                    })
+                    .then( () => {
+                        var options2 = {
+                            method: "POST",
+                            uri: ebi.submissionUrl,
+                            headers: {
+                                "Authorization": "Basic " + new Buffer(ebi.username + ":" + ebi.password).toString('base64'),
+                                "Accept": "application/xml",
+                            },
+                            formData: {
+                                SUBMISSION: {
+                                    value: fs.createReadStream(tmpPath + '__submission__.xml'),
+                                    options: {
+                                        filename: 'SUBMISSION.xml',
+                                        contentType: 'application/xml'
+                                    }
+                                },
+                                EXPERIMENT: {
+                                    value: fs.createReadStream(tmpPath + '__experiment__.xml'),
+                                    options: {
+                                        filename: 'EXPERIMENT.xml',
+                                        contentType: 'application/xml'
+                                    }
+                                },
+                                RUN: {
+                                    value: fs.createReadStream(tmpPath + '__run__.xml'),
+                                    options: {
+                                        filename: 'RUN.xml',
+                                        contentType: 'application/xml'
+                                    }
+                                }
+                            }
+                        };
+                        return requestp(options2);
+                    })
+                    .then(function (parsedBody) {
+                        console.log(parsedBody);
                     })
             })
             .catch(console.error);
     }
+}
+
+function generateExperiment(sample, ) {}
+
+function xmlToObj(xml) {
+    return new Promise(function(resolve, reject) {
+        xml2js.parseString(xml, function(err, result) {
+            if (err)
+                reject(err);
+            else
+                resolve(result);
+        });
+    });
 }
 
 function writeFile(filepath, data) {
@@ -471,10 +516,12 @@ class JobManager {
     runJob(job) {
         var self = this;
 
-        self.transitionJob(job, STATUS.STAGING_INPUTS)
+        self.transitionJob(job, STATUS.INITIALIZING)
+        .then( () => { return job.init() })
+        .then( () => self.transitionJob(job, STATUS.STAGING_INPUTS) )
         .then( () => { return job.stageInputs() })
-//        .then( () => self.transitionJob(job, STATUS.SUBMITTING) )
-//        .then( () => { return job.submit() })
+        .then( () => self.transitionJob(job, STATUS.SUBMITTING) )
+        .then( () => { return job.submit() })
 //        .then( () => { return job.runLibra() })
 //        .then( () => self.transitionJob(job, STATUS.ARCHIVING) )
 //        .then( () => { return job.archive() })

@@ -171,6 +171,12 @@ models.getProject = function(projectId) {
                     { model: models.sample_file_type
                     }
                   ]
+                },
+                { model: models.sample_attr,
+                  include: [
+                    { model: models.sample_attr_type
+                    }
+                  ]
                 }
               ]
             }
