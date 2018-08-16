@@ -153,7 +153,10 @@ class Job {
                 ACTIONS: {
                     ACTION: {
                         ADD: {}
-                    }
+                    },
+//                    ACTION: {
+//                        VALIDATE: {}
+//                    },
                 }
             }
         });
@@ -258,6 +261,18 @@ class Job {
                     .then(function (response) {
                         console.log(response);
 
+                        if (response.RECEIPT.MESSAGES) {
+                            response.RECEIPT.MESSAGES.forEach( message => {
+                                if (message.ERROR) {
+                                    console.log(message.ERROR);
+                                    throw(new Error(message.ERROR.join(",")));
+                                }
+                            });
+                        }
+
+                        console.log(response.RECEIPT.PROJECT);
+                        console.log(response.RECEIPT.SAMPLE);
+
                         var experimentSetObj = { EXPERIMENT_SET: [] };
                         var runSetObj = { RUN_SET: [] };
 
@@ -266,14 +281,14 @@ class Job {
                             var sampleAlias = sampleRes.$.alias;
                             var sample = samplesByAlias[sampleAlias];
 
-                            var projectAccession = response.RECEIPT.PROJECT[0].$.accession;
+                            self.projectAccession = response.RECEIPT.PROJECT[0].$.accession;
 
                             var experimentAlias = "experiment_" + sample.sample_id + "_" + self.id;
                             var experimentObj = {
                                 EXPERIMENT: {
                                   $: { alias: experimentAlias, center_name: "Hurwitz Lab" }, // FIXME
                                   TITLE: "",
-                                  STUDY_REF: { $: { accession: projectAccession } },
+                                  STUDY_REF: { $: { accession: self.projectAccession } },
                                   DESIGN: {
                                     DESIGN_DESCRIPTION: {},
                                     SAMPLE_DESCRIPTOR: { $: { accession: sampleAccession } },
@@ -373,8 +388,41 @@ class Job {
                     .then(function (parsedBody) {
                         console.log(parsedBody);
                     })
-            })
-            .catch(console.error);
+                    .then( () => {
+                        var submissionXml = builder.buildObject({
+                            SUBMISSION: {
+                                //$: { center_name: "Hurwitz Lab" }, // FIXME
+                                ACTIONS: {
+                                    ACTION: {
+                                        RELEASE: { $: { target: self.projectAccession } }
+                                    }
+                                }
+                            }
+                        });
+
+                        var options2 = {
+                            method: "POST",
+                            uri: ebi.submissionUrl,
+                            headers: {
+                                "Authorization": "Basic " + new Buffer(ebi.username + ":" + ebi.password).toString('base64'),
+                                "Accept": "application/xml",
+                            },
+                            formData: {
+                                SUBMISSION: {
+                                    value: submissionXml,
+                                    options: {
+                                        filename: 'SUBMISSION.xml',
+                                        contentType: 'application/xml'
+                                    }
+                                }
+                            }
+                        };
+                        return requestp(options2);
+                    })
+                    .then(function (parsedBody) {
+                        console.log(parsedBody);
+                    })
+            });
     }
 }
 
@@ -498,7 +546,8 @@ class JobManager {
     async getPendingProjects() {
         return models.project.findAll({
             where: { publication_status: 1 },
-            include: [ models.user ]
+            include: [ models.user ],
+            logging: false
         });
     }
 
