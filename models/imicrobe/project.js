@@ -83,6 +83,19 @@ module.exports = function(sequelize, DataTypes) {
       allowNull: false,
       defaultValue: '0'
     },
+    publication_status: {
+      type: DataTypes.INTEGER(1),
+      allowNull: false,
+      defaultValue: '0'
+    },
+    publication_submitter_id: {
+      type: DataTypes.INTEGER(10).UNSIGNED,
+      allowNull: true,
+      references: {
+        model: 'user',
+        key: 'user_id'
+      }
+    },
     creation_date: {
       type: DataTypes.TIME,
       allowNull: false,

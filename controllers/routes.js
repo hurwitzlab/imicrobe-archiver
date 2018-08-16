@@ -56,6 +56,24 @@ module.exports = function(app, jobManager) {
         };
     });
 
+    app.get('/jobs/project/:id([\\w\\-]+)', async (request, response) => {
+        requireAuth(request);
+
+        try {
+            var job = await jobManager.getJobByProjectId(request.params.id, request.auth.profile.username);
+            if (!job)
+                throw(ERR_NOT_FOUND);
+
+            response.json({
+                status: "success",
+                result: job
+            });
+        }
+        catch(error) {
+            errorHandler(error, request, response);
+        };
+    });
+
     app.get('/jobs/:id([\\w\\-]+)/history', async (request, response) => {
         try {
             var job = await jobManager.getJob(request.params.id, request.auth.profile.username);

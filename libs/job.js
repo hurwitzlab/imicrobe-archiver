@@ -456,7 +456,18 @@ class JobManager {
     async getJob(id, username) {
         var self = this;
 
-        const job = await this.db.getJob(id);
+        const job = await this.db.getJobBy(id);
+
+        if (!job || (username && job.username != username))
+            return;
+
+        return self.createJob(job);
+    }
+
+    async getJobByProjectId(id, username) {
+        var self = this;
+
+        const job = await this.db.getJobByProjectId(id);
 
         if (!job || (username && job.username != username))
             return;
@@ -482,6 +493,13 @@ class JobManager {
         const jobs = await this.db.getActiveJobs();
 
         return jobs.map( job => { return self.createJob(job) } );
+    }
+
+    async getPendingProjects() {
+        return models.project.findAll({
+            where: { publication_status: 1 },
+            include: [ models.user ]
+        });
     }
 
     createJob(job) {
@@ -511,6 +529,18 @@ class JobManager {
         console.log('Job.transition: job ' + job.id + ' from ' + job.status + ' to ' + newStatus);
         job.setStatus(newStatus);
         await this.db.updateJob(job.id, job.status, (newStatus == STATUS.FINISHED));
+
+        var pubStatus;
+        if (newStatus == STATUS.FINISHED)
+            pubStatus = 3;
+        else
+            pubStatus = 2;
+
+        await models.project.update(
+            { publication_status: pubStatus
+            },
+            { where: { project_id: job.projectId } }
+        );
     }
 
     runJob(job) {
@@ -522,9 +552,6 @@ class JobManager {
         .then( () => { return job.stageInputs() })
         .then( () => self.transitionJob(job, STATUS.SUBMITTING) )
         .then( () => { return job.submit() })
-//        .then( () => { return job.runLibra() })
-//        .then( () => self.transitionJob(job, STATUS.ARCHIVING) )
-//        .then( () => { return job.archive() })
         .then( () => self.transitionJob(job, STATUS.FINISHED) )
         .catch( error => {
             console.log('runJob ERROR:', error);
@@ -534,6 +561,16 @@ class JobManager {
 
     async update() {
         var self = this;
+
+        var projects = await self.getPendingProjects();
+        projects.forEach(
+            async project => {
+                console.log("Submitting project ", project.project_id);
+                var job = new Job({ projectId: project.project_id });
+                job.username = project.user.user_name;
+                self.submitJob(job);
+            }
+        );
 
         //console.log("Update ...")
         var jobs = await self.getActiveJobs();

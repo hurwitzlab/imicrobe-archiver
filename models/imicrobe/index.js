@@ -56,6 +56,9 @@ module.exports = models;
 models.project.hasMany(models.sample, { foreignKey: 'project_id' });
 models.sample.belongsTo(models.project, { foreignKey: 'project_id' });
 
+// project <-> user
+models.project.belongsTo(models.user, { foreignKey: 'publication_submitter_id' });
+
 // project_file -> project_file
 //models.project.hasMany(models.project_file, { foreignKey: 'project_id' });
 //models.project_file.belongsTo(models.project, { foreignKey: 'project_id' });

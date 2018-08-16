@@ -18,6 +18,10 @@ class Database {
         return sqlite.get("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE job_id=?", jobId);
     }
 
+    getJobByProjectId(projectId) {
+        return sqlite.get("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE project_id=?", projectId);
+    }
+
     getJobs() {
         return sqlite.all("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs");
     }
