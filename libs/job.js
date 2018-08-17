@@ -23,6 +23,7 @@ const STATUS = {
     QUEUED:          "QUEUED",          // Waiting to be processed
     STAGING_INPUTS:  "STAGING_INPUTS",  // Transferring input files to FTP
     SUBMITTING:      "SUBMITTING",      // Submitting XML forms
+    SUBMITTED:       "SUBMITTED",       // Submitted
     FINISHED:        "FINISHED",        // All steps finished successfully
     FAILED:          "FAILED",          // Non-zero return code from any step
     STOPPED:         "STOPPED"          // Cancelled due to server restart
@@ -424,6 +425,17 @@ class Job {
                     })
             });
     }
+
+    finish() {
+        var self = this;
+
+        return models.project.update(
+            { ebi_accn: self.projectAccession,
+//              ebi_submission_date:
+            },
+            { where: { project_id: self.projectId } }
+        );
+    }
 }
 
 function generateExperiment(sample, ) {}
@@ -595,6 +607,8 @@ class JobManager {
         .then( () => { return job.stageInputs() })
         .then( () => self.transitionJob(job, STATUS.SUBMITTING) )
         .then( () => { return job.submit() })
+        .then( () => self.transitionJob(job, STATUS.SUBMITTED) )
+        .then( () => { return job.finish() })
         .then( () => self.transitionJob(job, STATUS.FINISHED) )
         .catch( error => {
             console.log('runJob ERROR:', error);
