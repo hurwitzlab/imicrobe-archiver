@@ -545,7 +545,7 @@ class JobManager {
 
     async getPendingProjects() {
         return models.project.findAll({
-            where: { publication_status: 1 },
+            where: { publication_status: "PENDING" },
             include: [ models.user ],
             logging: false
         });
@@ -579,14 +579,8 @@ class JobManager {
         job.setStatus(newStatus);
         await this.db.updateJob(job.id, job.status, (newStatus == STATUS.FINISHED));
 
-        var pubStatus;
-        if (newStatus == STATUS.FINISHED)
-            pubStatus = 3;
-        else
-            pubStatus = 2;
-
         await models.project.update(
-            { publication_status: pubStatus
+            { publication_status: newStatus
             },
             { where: { project_id: job.projectId } }
         );
