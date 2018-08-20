@@ -87,7 +87,7 @@ class Job {
 
                 var p = [];
                 self.files.forEach(f => {
-                    var filepath = f.file.replace("/iplant/home", "");
+                    var filepath = f.file;//.replace("/iplant/home", "");
 
                     // Create temp dir
                     var localPath = stagingPath + path.dirname(filepath);
@@ -95,25 +95,33 @@ class Job {
 
                     // Download file from Agave into local temp space
                     var localFile = stagingPath + filepath;
-                    var agave = new agaveApi.AgaveAPI({ token: self.token });
-                    p.push( () => agave.filesGet(filepath, localFile) );
-                    //FIXME Agave error json response needs to be detected
+
+                    // Removing Agave filesGet because of short token lifespan issue
+                    //var agave = new agaveApi.AgaveAPI({ token: self.token });
+                    //p.push( () => agave.filesGet(filepath, localFile) );
 
                     // Convert file to FASTQ if necessary
                     var newFile = localFile;
                     if (/(.fa|.fasta)$/.test(filepath)) {
-                        f.dataValues.newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq.gz";
-                        p.push( () => exec_cmd('perl scripts/fasta_to_fastq.pl ' + localFile + ' | gzip --stdout > ' + f.dataValues.newFile) );
+                        newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('iget -Tf ' + filepath + ' ' + localFile + ' && perl scripts/fasta_to_fastq.pl ' + localFile + ' | gzip --stdout > ' + newFile) );
                     }
                     else if (/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/.test(filepath)) {
-                        f.dataValues.newFile = newFile.replace(/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/, "") + ".fastq.gz";
-                        p.push( () => exec_cmd('gunzip --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + f.dataValues.newFile) );
+                        newFile = newFile.replace(/(.fa.gz|.fa.gzip|.fasta.gz|.fasta.gzip)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('iget -Tf ' + filepath + ' ' + localFile + ' && gunzip --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + newFile) );
                     }
                     else if (/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/.test(filepath)) {
-                        f.dataValues.newFile = newFile.replace(/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/, "") + ".fastq.gz";
-                        p.push( () => exec_cmd('bunzip2 --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + f.dataValues.newFile) );
+                        newFile = newFile.replace(/(.fa.bz2|.fa.bzip2|.fasta.bz2|.fasta.bzip2)$/, "") + ".fastq.gz";
+                        p.push( () => exec_cmd('iget -Tf ' + filepath + ' ' + localFile + ' && bunzip2 --stdout ' + localFile + ' | perl scripts/fasta_to_fastq.pl | gzip --stdout > ' + newFile) );
+                    }
+                    else {
+                        throw(new Error("Unsupported input file format: " + localFile));
                     }
 
+                    // Save converted file name/path for later reference in submission
+                    f.dataValues.newFile = newFile;
+
+                    // Calculate MD5sum
                     p.push( () => {
                         md5File(newFile).then(hash => {
                           console.log("MD5 sum:", hash);
@@ -137,8 +145,7 @@ class Job {
             .then(function (list) {
                 console.log(list);
                 return ftp.end();
-            })
-            .catch(console.error);
+            });
     }
 
     submit() {
@@ -179,6 +186,7 @@ class Job {
         var sampleSetObj = { SAMPLE_SET: [] };
 
         var samplesByAlias = {};
+        var filesByAlias = {};
 
         self.project.samples.forEach(sample => {
             var sampleAlias = "sample_"  + (sample.sample_acc ? sample.sample_acc : sample.sample_id) + "_" + self.id;
@@ -262,13 +270,18 @@ class Job {
                     .then(function (response) {
                         console.log(response);
 
-                        if (response.RECEIPT.MESSAGES) {
-                            response.RECEIPT.MESSAGES.forEach( message => {
-                                if (message.ERROR) {
-                                    console.log(message.ERROR);
-                                    throw(new Error(message.ERROR.join(",")));
-                                }
-                            });
+                        if (response.RECEIPT.$.success == "false") {
+                            if (response.RECEIPT.MESSAGES) {
+                                response.RECEIPT.MESSAGES.forEach( message => {
+                                    if (message.ERROR) {
+                                        console.log(message.ERROR);
+                                        throw(new Error(message.ERROR.join(",")));
+                                    }
+                                });
+                            }
+                            else {
+                                throw(new Error("Unknown error"));
+                            }
                         }
 
                         console.log(response.RECEIPT.PROJECT);
@@ -283,6 +296,7 @@ class Job {
                             var sample = samplesByAlias[sampleAlias];
 
                             self.projectAccession = response.RECEIPT.PROJECT[0].$.accession;
+                            self.submissionAccession = response.RECEIPT.SUBMISSION[0].$.accession;
 
                             var experimentAlias = "experiment_" + sample.sample_id + "_" + self.id;
                             var experimentObj = {
@@ -295,7 +309,7 @@ class Job {
                                     SAMPLE_DESCRIPTOR: { $: { accession: sampleAccession } },
                                     LIBRARY_DESCRIPTOR: {
                                       LIBRARY_STRATEGY: "RNA-Seq", // FIXME
-                                      LIBRARY_SOURCE: "TRANSCRIPTOMIC", // FIXME
+                                      LIBRARY_SOURCE: "METAGENOMIC", // FIXME
                                       LIBRARY_SELECTION: "cDNA", // FIXME
                                       LIBRARY_LAYOUT: {
                                         SINGLE: {} // FIXME
@@ -318,6 +332,7 @@ class Job {
                             var runsObj = [];
                             self.files.forEach(file => {
                                 var runAlias = "run_" + sample.sample_id + "_" + runsObj.length + "_" + self.id;
+                                filesByAlias[runAlias] = file;
                                 runsObj.push({
                                     RUN: {
                                       $: { alias: runAlias, center_name: "Hurwitz Lab" }, // FIXME
@@ -388,6 +403,33 @@ class Job {
                     })
                     .then(function (parsedBody) {
                         console.log(parsedBody);
+                        return xmlToObj(parsedBody);
+                    })
+                    .then(function (response) {
+                        console.log(response);
+                        console.log(response.RECEIPT.RUN);
+
+                        if (response.RECEIPT.$.success == "false") {
+                            if (response.RECEIPT.MESSAGES) {
+                                response.RECEIPT.MESSAGES.forEach( message => {
+                                    if (message.ERROR) {
+                                        console.log(message.ERROR);
+                                        throw(new Error(message.ERROR.join(",")));
+                                    }
+                                });
+                            }
+                            else {
+                                throw(new Error("Unknown error"));
+                            }
+                        }
+
+//                        if (response.RECEIPT.RUN) {
+//                            response.RECEIPT.RUN.forEach(run => {
+//                                var alias = run.$.alias;
+//                                var accession = run.$.accession;
+//                                filesByAlias[alias].dataValues.accession = accession;
+//                            });
+//                        }
                     })
                     .then( () => {
                         var submissionXml = builder.buildObject({
@@ -400,6 +442,7 @@ class Job {
                                 }
                             }
                         });
+                        console.log(submissionXml);
 
                         var options2 = {
                             method: "POST",
@@ -422,6 +465,24 @@ class Job {
                     })
                     .then(function (parsedBody) {
                         console.log(parsedBody);
+                        return xmlToObj(parsedBody);
+                    })
+                    .then(function (response) {
+                        console.log(response);
+
+                        if (response.RECEIPT.$.success == "false") {
+                            if (response.RECEIPT.MESSAGES) {
+                                response.RECEIPT.MESSAGES.forEach( message => {
+                                    if (message.ERROR) {
+                                        console.log(message.ERROR);
+                                        throw(new Error(message.ERROR.join(",")));
+                                    }
+                                });
+                            }
+                            else {
+                                throw(new Error("Unknown error"));
+                            }
+                        }
                     })
             });
     }
@@ -429,11 +490,23 @@ class Job {
     finish() {
         var self = this;
 
-        return models.project.update(
-            { ebi_accn: self.projectAccession,
-//              ebi_submission_date:
-            },
-            { where: { project_id: self.projectId } }
+        return Promise.all([
+            self.files.map(f => {
+                var prefix = self.submissionAccession.substring(0, 6);
+                var ebiUrl = "ftp://ftp.sra.ebi.ac.uk/vol1/" + prefix + "/" + self.submissionAccession + "/fastq/" + path.basename(f.dataValues.newFile); // FIXME hardcoded base URL
+                return f.update({
+                    file: ebiUrl
+                });
+            })
+        ])
+        .then( () =>
+            models.project.update(
+                {   private: 0,
+                    ebi_accn: self.projectAccession,
+                    //ebi_submission_date:
+                },
+                { where: { project_id: self.projectId } }
+            )
         );
     }
 }
