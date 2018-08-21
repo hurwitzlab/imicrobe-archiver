@@ -94,7 +94,6 @@ module.exports = function(app, jobManager) {
     app.post('/jobs', async (request, response) => {
         var j = new job.Job(request.body);
         j.username = request.auth.profile.username;
-        j.token = request.auth.profile.token;
         await jobManager.submitJob(j);
 
         response.json({

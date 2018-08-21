@@ -15,28 +15,28 @@ class Database {
     }
 
     getJob(jobId) {
-        return sqlite.get("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE job_id=?", jobId);
+        return sqlite.get("SELECT job_id, project_id, username, status, start_time, end_time FROM jobs WHERE job_id=?", jobId);
     }
 
     getJobByProjectId(projectId) {
-        return sqlite.get("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE project_id=?", projectId);
+        return sqlite.get("SELECT job_id, project_id, username, status, start_time, end_time FROM jobs WHERE project_id=?", projectId);
     }
 
     getJobs() {
-        return sqlite.all("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs");
+        return sqlite.all("SELECT job_id, project_id, username, status, start_time, end_time FROM jobs");
     }
 
     getJobsForUser(username) {
-        return sqlite.all("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE username=?", username);
+        return sqlite.all("SELECT job_id, project_id, username, status, start_time, end_time FROM jobs WHERE username=?", username);
     }
 
     getActiveJobs() {
-        return sqlite.all("SELECT job_id, project_id, username, token, status, start_time, end_time FROM jobs WHERE status NOT IN ('STOPPED', 'FINISHED', 'FAILED')");
+        return sqlite.all("SELECT job_id, project_id, username, status, start_time, end_time FROM jobs WHERE status NOT IN ('STOPPED', 'FINISHED', 'FAILED')");
     }
 
-    addJob(job_id, project_id, username, token, status) {
+    addJob(job_id, project_id, username, status) {
         var start_time = getTimestamp();
-        return sqlite.run("INSERT INTO jobs (job_id, project_id, username, token, status, start_time) VALUES (?,?,?,?,?,?)", [job_id, project_id, username, token, status, start_time]);
+        return sqlite.run("INSERT INTO jobs (job_id, project_id, username, status, start_time) VALUES (?,?,?,?,?)", [job_id, project_id, username, status, start_time]);
     }
 
     updateJob(job_id, status, isEnded) {
@@ -45,7 +45,7 @@ class Database {
     }
 
     stopJobs() {
-        return sqlite.run("UPDATE jobs SET status='STOPPED', token='' WHERE status NOT IN ('STOPPED', 'FINISHED', 'FAILED')");
+        return sqlite.run("UPDATE jobs SET status='STOPPED' WHERE status NOT IN ('STOPPED', 'FINISHED', 'FAILED')");
     }
 }
 

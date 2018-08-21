@@ -36,7 +36,6 @@ class Job {
         this.id = props.id || shortid.generate();
         this.projectId = props.projectId;
         this.username = props.username; // CyVerse username of user running the job
-        this.token = props.token;
         this.startTime = props.startTime;
         this.endTime = props.endTime;
         this.status = props.status || STATUS.CREATED;
@@ -95,10 +94,6 @@ class Job {
 
                     // Download file from Agave into local temp space
                     var localFile = stagingPath + filepath;
-
-                    // Removing Agave filesGet because of short token lifespan issue
-                    //var agave = new agaveApi.AgaveAPI({ token: self.token });
-                    //p.push( () => agave.filesGet(filepath, localFile) );
 
                     // Convert file to FASTQ if necessary
                     var newFile = localFile;
@@ -641,7 +636,6 @@ class JobManager {
             id: job.job_id,
             projectId: job.project_id,
             username: job.username,
-            token: job.token,
             status: job.status,
             startTime: job.start_time,
             endTime: job.end_time
@@ -656,7 +650,7 @@ class JobManager {
             return;
         }
 
-        return this.db.addJob(job.id, job.projectId, job.username, job.token, job.status);
+        return this.db.addJob(job.id, job.projectId, job.username, job.status);
     }
 
     async transitionJob(job, newStatus) {
