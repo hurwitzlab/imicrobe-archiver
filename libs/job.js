@@ -197,16 +197,19 @@ class Job {
                 }
             };
 
-            var attributesObj = sample.sample_attrs.map(attr => {
-                return {
+            var attrObj = [];
+            sample.sample_attrs.forEach(attr => {
+                attrObj.push({
                     SAMPLE_ATTRIBUTE: {
                         TAG: attr.sample_attr_type.type,
                         VALUE: attr.attr_value
                     }
-                }
+                });
             });
 
-            sampleObj.SAMPLE.SAMPLE_ATTRIBUTES = attributesObj;
+            // Weird but needed to get proper format
+            sampleObj.SAMPLE.SAMPLE_ATTRIBUTES = [];
+            sampleObj.SAMPLE.SAMPLE_ATTRIBUTES.push(attrObj);
 
             sampleSetObj.SAMPLE_SET.push(sampleObj);
         });
@@ -293,6 +296,26 @@ class Job {
                             self.projectAccession = response.RECEIPT.PROJECT[0].$.accession;
                             self.submissionAccession = response.RECEIPT.SUBMISSION[0].$.accession;
 
+                            var attrs = {};
+                            sample.sample_attrs.forEach(attr => {
+                                var key = attr.sample_attr_type.type.toLowerCase();
+                                attrs[key] = attr.attr_value;
+                            });
+                            console.log(attrs);
+
+                            if (!attrs["library_strategy"])
+                                throw(new Error("Missing library_strategy attribute for Sample '" + sample.sample_name + "'"));
+                            if (!attrs["library_source"])
+                                throw(new Error("Missing library_source attribute for Sample '" + sample.sample_name + "'"));
+                            if (!attrs["library_selection"])
+                                throw(new Error("Missing library_selection attribute for Sample '" + sample.sample_name + "'"));
+                            if (!attrs["library_layout"])
+                                throw(new Error("Missing library_layout attribute for Sample '" + sample.sample_name + "'"));
+                            if (!attrs["platform_type"])
+                                throw(new Error("Missing platform_type attribute for Sample '" + sample.sample_name + "'"));
+                            if (!attrs["platform_model"])
+                                throw(new Error("Missing platform_model attribute for Sample '" + sample.sample_name + "'"));
+
                             var experimentAlias = "experiment_" + sample.sample_id + "_" + self.id;
                             var experimentObj = {
                                 EXPERIMENT: {
@@ -303,26 +326,28 @@ class Job {
                                     DESIGN_DESCRIPTION: {},
                                     SAMPLE_DESCRIPTOR: { $: { accession: sampleAccession } },
                                     LIBRARY_DESCRIPTOR: {
-                                      LIBRARY_STRATEGY: "RNA-Seq", // FIXME
-                                      LIBRARY_SOURCE: "METAGENOMIC", // FIXME
-                                      LIBRARY_SELECTION: "cDNA", // FIXME
-                                      LIBRARY_LAYOUT: {
-                                        SINGLE: {} // FIXME
-                                      },
+                                      LIBRARY_STRATEGY: attrs["library_strategy"],
+                                      LIBRARY_SOURCE: attrs["library_source"].toUpperCase(),
+                                      LIBRARY_SELECTION: attrs["library_selection"],
+                                      LIBRARY_LAYOUT: {}
+//                                        attrs["library_layout"]: {} // SINGLE or PAIRED
+//                                      },
 //                                      LIBRARY_CONSTRUCTION_PROTOCOL: "Messenger RNA (mRNA) was isolated using the Dynabeads mRNA Purification Kit (Invitrogen, Carlsbad Ca. USA) and then sheared using divalent cations at 72*C. These cleaved RNA fragments were transcribed into first-strand cDNA using II Reverse Transcriptase (Invitrogen, Carlsbad Ca. USA) and N6 primer (IDT). The second-strand cDNA was subsequently synthesized using RNase H (Invitrogen, Carlsbad Ca. USA) and DNA polymerase I (Invitrogen, Shanghai China). The double-stranded cDNA then underwent end-repair, a single `A? base addition, adapter ligati on, and size selection on anagarose gel (250 * 20 bp). At last, the product was indexed and PCR amplified to finalize the library prepration for the paired-end cDNA."
                                     }
                                   },
-                                  PLATFORM: {
-                                    ILLUMINA: { INSTRUMENT_MODEL: "Illumina HiSeq 2000" }
-                                  },
-                //                  EXPERIMENT_ATTRIBUTES: {
-                //                    EXPERIMENT_ATTRIBUTE: {
-                //                      TAG: "library preparation date",
-                //                      VALUE: "2010-08"
-                //                    }
-                //                  }
+                                  PLATFORM: {}
+//                                    attrs["platform_type"]: { INSTRUMENT_MODEL: attrs["platform_model"] }
+//                                  },
+//                                  EXPERIMENT_ATTRIBUTES: {
+//                                    EXPERIMENT_ATTRIBUTE: {
+//                                      TAG: "library preparation date",
+//                                      VALUE: "2010-08"
+//                                    }
+//                                  }
                                 }
                             };
+                            experimentObj.EXPERIMENT.DESIGN.LIBRARY_DESCRIPTOR.LIBRARY_LAYOUT[attrs["library_layout"].toUpperCase()] = {}; // SINGLE or PAIRED
+                            experimentObj.EXPERIMENT.PLATFORM[attrs["platform_type"].toUpperCase()] = { INSTRUMENT_MODEL: attrs["platform_model"] };
 
                             var runsObj = [];
                             self.files.forEach(file => {
@@ -486,13 +511,14 @@ class Job {
         var self = this;
 
         return Promise.all([
-            self.files.map(f => {
-                var prefix = self.submissionAccession.substring(0, 6);
-                var ebiUrl = "ftp://ftp.sra.ebi.ac.uk/vol1/" + prefix + "/" + self.submissionAccession + "/fastq/" + path.basename(f.dataValues.newFile); // FIXME hardcoded base URL
-                return f.update({
-                    file: ebiUrl
-                });
-            })
+// temporarily removed for testing/development
+//            self.files.map(f => {
+//                var prefix = self.submissionAccession.substring(0, 6);
+//                var ebiUrl = "ftp://ftp.sra.ebi.ac.uk/vol1/" + prefix + "/" + self.submissionAccession + "/fastq/" + path.basename(f.dataValues.newFile); // FIXME hardcoded base URL
+//                return f.update({
+//                    file: ebiUrl
+//                });
+//            })
         ])
         .then( () =>
             models.project.update(
