@@ -204,13 +204,23 @@ class Job {
         self.project.samples.forEach(sample => {
             var sampleAlias = "sample_"  + (sample.sample_acc ? sample.sample_acc : sample.sample_id) + "_" + self.id;
             samplesByAlias[sampleAlias] = sample;
+
+            // FIXME this code block repeated below
+            var attrs = {};
+            sample.sample_attrs.forEach(attr => {
+                var key = attr.sample_attr_type.type.toLowerCase();
+                attrs[key] = attr.attr_value;
+            });
+
+            if (!attrs["taxon_id"])
+                throw(new Error("Missing taxon_id attribute for Sample '" + sample.sample_name + "'"));
+
             var sampleObj = {
                 SAMPLE: {
                   $: { alias: sampleAlias },
-                  TITLE: sample.sample_title,
+                  TITLE: sample.sample_name,
                   SAMPLE_NAME: {
-                    TAXON_ID: "1284369", // FIXME
-                    SCIENTIFIC_NAME: "stomach metagenome" // FIXME
+                    TAXON_ID: attrs["taxon_id"],
                   }
                 }
             };
@@ -314,6 +324,7 @@ class Job {
                             self.projectAccession = response.RECEIPT.PROJECT[0].$.accession;
                             self.submissionAccession = response.RECEIPT.SUBMISSION[0].$.accession;
 
+                            // FIXME this code block repeated above
                             var attrs = {};
                             sample.sample_attrs.forEach(attr => {
                                 var key = attr.sample_attr_type.type.toLowerCase();
