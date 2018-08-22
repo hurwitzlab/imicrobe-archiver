@@ -39,11 +39,11 @@ module.exports = models;
 //// project <-> domain
 //models.project.belongsToMany(models.domain, { through: models.project_to_domain, foreignKey: 'project_id' });
 //models.domain.belongsToMany(models.project, { through: models.project_to_domain, foreignKey: 'domain_id' });
-//
-//// project <-> publication
-//models.project.hasMany(models.publication, { foreignKey: 'project_id' });
-//models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
-//
+
+// project <-> publication
+models.project.hasMany(models.publication, { foreignKey: 'project_id' });
+models.publication.belongsTo(models.project, { foreignKey: 'project_id' });
+
 //// project <-> assembly
 //models.project.hasMany(models.assembly, { foreignKey: 'project_id' });
 //models.assembly.belongsTo(models.project, { foreignKey: 'project_id' });
@@ -167,6 +167,7 @@ models.getProject = function(projectId) {
     return models.project.findOne({
         where: { project_id: projectId },
         include: [
+            { model: models.publication },
             { model: models.sample,
               include: [
                 { model: models.sample_file,

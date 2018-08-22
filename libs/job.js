@@ -167,6 +167,20 @@ class Job {
             }
         });
 
+        var projectLinks = [];
+        self.project.publications.forEach(pub => {
+            if (pub.pubmed_id) {
+                projectLinks.push({
+                    PROJECT_LINK: {
+                        XREF_LINK: {
+                            DB: "PUBMED",
+                            ID: pub.pubmed_id
+                        }
+                    }
+                });
+            }
+        });
+
         var projectAlias = "project_" + (self.project.project_code ? self.project.project_code : self.project.project_id) + "_" + self.id;
         var projectXml = builder.buildObject({
             PROJECT_SET: {
@@ -176,7 +190,8 @@ class Job {
                     DESCRIPTION: self.project.description,
                     SUBMISSION_PROJECT: {
                         SEQUENCING_PROJECT: {}
-                    }
+                    },
+                    PROJECT_LINKS: projectLinks
                 }
             }
         });
