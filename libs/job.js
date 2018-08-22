@@ -150,9 +150,12 @@ class Job {
 
         var builder = new xml2js.Builder();
 
+        if (!self.project.institution)
+            throw(new Error("Missing project institution field"));
+
         var submissionXml = builder.buildObject({
             SUBMISSION: {
-                $: { center_name: "Hurwitz Lab" }, // FIXME
+                $: { center_name: self.project.institution },
                 ACTIONS: {
                     ACTION: {
                         ADD: {}
@@ -168,7 +171,7 @@ class Job {
         var projectXml = builder.buildObject({
             PROJECT_SET: {
                 PROJECT: {
-                    $: { alias: projectAlias, center_name: "Hurwitz Lab" }, // FIXME
+                    $: { alias: projectAlias },
                     TITLE: self.project.project_name,
                     DESCRIPTION: self.project.description,
                     SUBMISSION_PROJECT: {
@@ -188,7 +191,7 @@ class Job {
             samplesByAlias[sampleAlias] = sample;
             var sampleObj = {
                 SAMPLE: {
-                  $: { alias: sampleAlias, center_name: "Hurwitz Lab" }, // FIXME
+                  $: { alias: sampleAlias },
                   TITLE: sample.sample_title,
                   SAMPLE_NAME: {
                     TAXON_ID: "1284369", // FIXME
@@ -319,7 +322,7 @@ class Job {
                             var experimentAlias = "experiment_" + sample.sample_id + "_" + self.id;
                             var experimentObj = {
                                 EXPERIMENT: {
-                                  $: { alias: experimentAlias, center_name: "Hurwitz Lab" }, // FIXME
+                                  $: { alias: experimentAlias },
                                   TITLE: "",
                                   STUDY_REF: { $: { accession: self.projectAccession } },
                                   DESIGN: {
@@ -355,7 +358,7 @@ class Job {
                                 filesByAlias[runAlias] = file;
                                 runsObj.push({
                                     RUN: {
-                                      $: { alias: runAlias, center_name: "Hurwitz Lab" }, // FIXME
+                                      $: { alias: runAlias },
                                       EXPERIMENT_REF: { $: { refname: experimentAlias } },
                                       DATA_BLOCK: {
                                         FILES: {
@@ -454,7 +457,6 @@ class Job {
                     .then( () => {
                         var submissionXml = builder.buildObject({
                             SUBMISSION: {
-                                //$: { center_name: "Hurwitz Lab" }, // FIXME
                                 ACTIONS: {
                                     ACTION: {
                                         RELEASE: { $: { target: self.projectAccession } }
