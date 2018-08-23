@@ -355,7 +355,7 @@ class Job {
                                     DESIGN_DESCRIPTION: {},
                                     SAMPLE_DESCRIPTOR: { $: { accession: sampleAccession } },
                                     LIBRARY_DESCRIPTOR: {
-                                      LIBRARY_STRATEGY: attrs["library_strategy"],
+                                      LIBRARY_STRATEGY: attrs["library_strategy"].toUpperCase(),
                                       LIBRARY_SOURCE: attrs["library_source"].toUpperCase(),
                                       LIBRARY_SELECTION: attrs["library_selection"],
                                       LIBRARY_LAYOUT: {}
