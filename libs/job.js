@@ -2,13 +2,11 @@ const dblib = require('../models/local/db.js');
 const Promise = require('bluebird');
 const spawn = require('child_process').spawnSync;
 const exec = require('child_process').exec;
-const pathlib = require('path');
 const shortid = require('shortid');
 const PromiseFtp = require('promise-ftp');
 const md5File = require('md5-file/promise')
 const path = require('path');
 const mkdirp = require('mkdirp-promise');
-const fs = require('fs');
 const agaveApi = require('./agave');
 const sequelize = require('../config/mysql').sequelize;
 const models = require('../models/imicrobe/index');
@@ -149,15 +147,7 @@ class Job {
         console.log(projectXml);
         console.log(sampleXml);
 
-        var tmpPath = "./tmp/"; //config.stagingPath + "/" + self.id + "/";
-
-        await Promise.all([ // Is there a way to stream these XML docs from memory instead of writing to file first?
-            writeFile(tmpPath + '__submission__.xml', submissionXml),
-            writeFile(tmpPath + '__project__.xml', projectXml),
-            writeFile(tmpPath + '__sample__.xml', sampleXml),
-        ]);
-
-        var response = await this.ena.submitProject(tmpPath);
+        var response = await this.ena.submitProject(submissionXml, projectXml, sampleXml);
 
         console.log(response.RECEIPT.PROJECT);
         console.log(response.RECEIPT.SAMPLE);
@@ -167,23 +157,10 @@ class Job {
         console.log(experimentXml);
         console.log(runXml);
 
-        await Promise.all([
-            writeFile(tmpPath + '__experiment__.xml', experimentXml),
-            writeFile(tmpPath + '__run__.xml', runXml)
-        ]);
-
-        var response = await this.ena.submitExperiments(tmpPath);
+        var response = await this.ena.submitExperiments(submissionXml, experimentXml, runXml);
 
         console.log(response);
         console.log(response.RECEIPT.RUN);
-
-//      if (response.RECEIPT.RUN) {
-//          response.RECEIPT.RUN.forEach(run => {
-//              var alias = run.$.alias;
-//              var accession = run.$.accession;
-//              filesByAlias[alias].dataValues.accession = accession;
-//           });
-//      }
 
         var response = await this.ena.submitRelease();
     }
@@ -211,15 +188,6 @@ class Job {
             { where: { project_id: self.projectId } }
         );
     }
-}
-
-function writeFile(filepath, data) {
-    return new Promise(function(resolve, reject) {
-        fs.writeFile(filepath, data, 'UTF-8', function(err) {
-            if (err) reject(err);
-            else resolve(data);
-        });
-    });
 }
 
 function exec_cmd(cmd_str) {

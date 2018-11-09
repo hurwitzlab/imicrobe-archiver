@@ -1,5 +1,4 @@
 const https = require('https');
-const fs = require('fs');
 const path = require('path');
 const xml2js = require('xml2js');
 const requestp = require('request-promise');
@@ -229,7 +228,7 @@ class ENA {
         return [ experimentXml, runXml ];
     }
 
-    async submitProject(tmpPath) {
+    async submitProject(submissionXml, projectXml, sampleXml) {
         var self = this;
 
         var options = {
@@ -241,21 +240,21 @@ class ENA {
             },
             formData: {
                 SUBMISSION: {
-                    value: fs.createReadStream(tmpPath + '__submission__.xml'),
+                    value: submissionXml, //fs.createReadStream(tmpPath + '__submission__.xml'),
                     options: {
                         filename: 'SUBMISSION.xml',
                         contentType: 'application/xml'
                     }
                 },
                 PROJECT: {
-                    value: fs.createReadStream(tmpPath + '__project__.xml'),
+                    value: projectXml, //fs.createReadStream(tmpPath + '__project__.xml'),
                     options: {
                         filename: 'PROJECT.xml',
                         contentType: 'application/xml'
                     }
                 },
                 SAMPLE: {
-                    value: fs.createReadStream(tmpPath + '__sample__.xml'),
+                    value: sampleXml, //fs.createReadStream(tmpPath + '__sample__.xml'),
                     options: {
                         filename: 'SAMPLE.xml',
                         contentType: 'application/xml'
@@ -286,7 +285,7 @@ class ENA {
         return response;
     }
 
-    async submitExperiments(tmpPath) {
+    async submitExperiments(submissionXml, experimentXml, runXml) {
         var self = this;
 
         var options2 = {
@@ -298,21 +297,21 @@ class ENA {
             },
             formData: {
                 SUBMISSION: {
-                    value: fs.createReadStream(tmpPath + '__submission__.xml'),
+                    value: submissionXml, //fs.createReadStream(tmpPath + '__submission__.xml'),
                     options: {
                         filename: 'SUBMISSION.xml',
                         contentType: 'application/xml'
                     }
                 },
                 EXPERIMENT: {
-                    value: fs.createReadStream(tmpPath + '__experiment__.xml'),
+                    value: experimentXml, //fs.createReadStream(tmpPath + '__experiment__.xml'),
                     options: {
                         filename: 'EXPERIMENT.xml',
                         contentType: 'application/xml'
                     }
                 },
                 RUN: {
-                    value: fs.createReadStream(tmpPath + '__run__.xml'),
+                    value: runXml, //fs.createReadStream(tmpPath + '__run__.xml'),
                     options: {
                         filename: 'RUN.xml',
                         contentType: 'application/xml'
@@ -338,6 +337,14 @@ class ENA {
                 throw(new Error("Unknown error"));
             }
         }
+
+//      if (response.RECEIPT.RUN) {
+//          response.RECEIPT.RUN.forEach(run => {
+//              var alias = run.$.alias;
+//              var accession = run.$.accession;
+//              filesByAlias[alias].dataValues.accession = accession;
+//           });
+//      }
 
         return response;
     }
