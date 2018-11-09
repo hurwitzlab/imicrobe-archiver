@@ -31,7 +31,7 @@ module.exports = function(app, jobManager) {
         try {
             requireAuth(request);
 
-            var jobs = await jobManager.getJobs(request.auth.profile.username);
+            let jobs = await jobManager.getJobs(request.auth.profile.username);
 
             response.json({
                 status: "success",
@@ -47,7 +47,7 @@ module.exports = function(app, jobManager) {
         try {
             requireAuth(request);
 
-            var job = await jobManager.getJob(request.params.id, request.auth.profile.username);
+            let job = await jobManager.getJob(request.params.id, request.auth.profile.username);
             if (!job)
                 throw(ERR_NOT_FOUND);
 
@@ -65,7 +65,7 @@ module.exports = function(app, jobManager) {
         try {
             requireAuth(request);
 
-            var job = await jobManager.getJobByProjectId(request.params.id, request.auth.profile.username);
+            let job = await jobManager.getJobByProjectId(request.params.id, request.auth.profile.username);
             if (!job)
                 throw(ERR_NOT_FOUND);
 
@@ -83,11 +83,11 @@ module.exports = function(app, jobManager) {
         try {
             requireAuth(request);
 
-            var job = await jobManager.getJob(request.params.id, request.auth.profile.username);
+            let job = await jobManager.getJob(request.params.id, request.auth.profile.username);
             if (!job)
                 throw(ERR_NOT_FOUND);
 
-            //var history = arrayify(job.history); // TODO
+            //let history = arrayify(job.history); // TODO
             response.json({
                 status: "success",
                 result: []
@@ -99,7 +99,7 @@ module.exports = function(app, jobManager) {
     });
 
     app.post('/jobs', async (request, response) => {
-        var j = new job.Job(request.body);
+        let j = new job.Job(request.body);
         j.username = request.auth.profile.username;
         await jobManager.submitJob(j);
 
@@ -140,7 +140,7 @@ function requireAuth(req) {
 }
 
 async function agaveTokenValidator(req, res, next) {
-    var token = (req && req.headers) ? req.headers.authorization : null;
+    let token = (req && req.headers) ? req.headers.authorization : null;
     console.log("validateAgaveToken: token:", token);
 
     // Create auth object and default to unauthorized
@@ -150,13 +150,13 @@ async function agaveTokenValidator(req, res, next) {
 
     if (token) {
         try {
-            var response = await getAgaveProfile(token);
+            let response = await getAgaveProfile(token);
             if (!response || response.status != "success") {
                 console.log('validateAgaveToken: !!!! Bad profile status: ' + response.status);
                 return;
             }
 
-            var profile = response.result;
+            let profile = response.result;
             if (profile) {
                 console.log("validateAgaveToken: *** success ***  username:", profile.username);
 
@@ -190,7 +190,7 @@ function getAgaveProfile(token) {
 }
 
 function arrayify(obj) {
-    var newObj = {};
+    let newObj = {};
     Object.keys(obj).forEach(prop => {
         if (Array.isArray(obj))
             newObj[prop] = obj[prop];

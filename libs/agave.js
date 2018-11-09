@@ -8,13 +8,13 @@ class AgaveAPI {
     }
 
     filesGet(remotePath, localPath) {
-        var self = this;
+        let self = this;
 
         // Request file from Agave
         return new Promise(function(resolve, reject) {
             console.log("AgaveAPI.filesGet", self.token, remotePath, localPath);
 
-            var options = {
+            let options = {
                 host: config.agaveConfig.baseUrl.replace(/^https?:\/\//,''), // remove protocol
                 path: "/files/v2/media/" + remotePath,
                 headers: {
@@ -22,9 +22,9 @@ class AgaveAPI {
                 }
             };
 
-            var file = fs.createWriteStream(localPath);
+            let file = fs.createWriteStream(localPath);
 
-            var request = https.get(options, response => {
+            let request = https.get(options, response => {
                 if (!('' + response.statusCode).match(/^2\d\d$/)) {
                     console.log("http status", response.statusCode);
                     reject();

@@ -1,11 +1,11 @@
 'use strict';
 
-var cluster = require('cluster');
-var express = require('express');
+const cluster = require('cluster');
+const express = require('express');
 const job = require('./libs/job');
 
 // Load config file
-var config = require('./config.json');
+const config = require('./config.json');
 
 // Spawn workers and start server
 var app = express();

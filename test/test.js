@@ -1,4 +1,4 @@
-var assert = require('assert');
+const assert = require('assert');
 
 let chai = require('chai');
 let chaiHttp = require('chai-http');
@@ -6,8 +6,8 @@ let should = chai.should();
 
 chai.use(chaiHttp);
 
-var config = require('../config.json');
-var hostUrl = 'http://localhost:' + config.serverPort;
+const config = require('../config.json');
+const hostUrl = 'http://localhost:' + config.serverPort;
 
 describe('Array', function() {
   describe('#indexOf()', function() {

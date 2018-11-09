@@ -1,8 +1,8 @@
 'use strict';
 
-var fs        = require("fs");
-var path      = require("path");
-var sequelize = require('../../config/mysql').sequelize;
+const fs        = require("fs");
+const path      = require("path");
+const sequelize = require('../../config/mysql').sequelize;
 
 
 /**

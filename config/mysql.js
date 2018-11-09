@@ -1,7 +1,7 @@
 'use strict';
 
 // Load config file
-var config = require('../config.json');
+const config = require('../config.json');
 
 // Initialize MySQL connection via ORM
 var Sequelize = require('sequelize');

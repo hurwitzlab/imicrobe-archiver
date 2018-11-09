@@ -35,12 +35,12 @@ class Database {
     }
 
     addJob(job_id, project_id, username, status) {
-        var start_time = getTimestamp();
+        let start_time = getTimestamp();
         return sqlite.run("INSERT INTO jobs (job_id, project_id, username, status, start_time) VALUES (?,?,?,?,?)", [job_id, project_id, username, status, start_time]);
     }
 
     updateJob(job_id, status, isEnded) {
-        var end_time = ( isEnded ? getTimestamp() : null );
+        let end_time = ( isEnded ? getTimestamp() : null );
         return sqlite.run("UPDATE jobs SET status=?, end_time=? WHERE job_id=?", [status, end_time, job_id]);
     }
 
@@ -50,7 +50,7 @@ class Database {
 }
 
 function getTimestamp() {
-    var now = new Date();
+    let now = new Date();
     return dateFormat(now, "yyyy-mm-dd") + "T" + dateFormat(now, "HH:MM:ss.lo"); // dateFormat(now, "isoDateTime");
 }
 

@@ -42,7 +42,7 @@ class ENA {
         if (!project.institution)
             throw(new Error("Missing project institution field"));
 
-        var projectLinks = [];
+        let projectLinks = [];
         project.publications.forEach(pub => {
             if (pub.pubmed_id) {
                 projectLinks.push({
@@ -56,8 +56,8 @@ class ENA {
             }
         });
 
-        var projectAlias = "project_" + (project.project_code ? project.project_code : project.project_id) + "_" + this.id;
-        var projectXml = this.builder.buildObject({
+        let projectAlias = "project_" + (project.project_code ? project.project_code : project.project_id) + "_" + this.id;
+        let projectXml = this.builder.buildObject({
             PROJECT_SET: {
                 PROJECT: {
                     $: { alias: projectAlias },
@@ -75,28 +75,28 @@ class ENA {
     }
 
     generateSampleXml(samples) {
-        var self = this;
+        let self = this;
 
-        var sampleSetObj = { SAMPLE_SET: [] };
+        let sampleSetObj = { SAMPLE_SET: [] };
 
         self.samplesByAlias = {};
-        //var filesByAlias = {};
+        //self.filesByAlias = {};
 
         samples.forEach(sample => {
-            var sampleAlias = "sample_"  + (sample.sample_acc ? sample.sample_acc : sample.sample_id) + "_" + this.id;
+            let sampleAlias = "sample_"  + (sample.sample_acc ? sample.sample_acc : sample.sample_id) + "_" + this.id;
             self.samplesByAlias[sampleAlias] = sample;
 
             // FIXME this code block repeated below
-            var attrs = {};
+            let attrs = {};
             sample.sample_attrs.forEach(attr => {
-                var key = attr.sample_attr_type.type.toLowerCase();
+                let key = attr.sample_attr_type.type.toLowerCase();
                 attrs[key] = attr.attr_value;
             });
 
             if (!attrs["taxon_id"])
                 throw(new Error("Missing taxon_id attribute for Sample '" + sample.sample_name + "'"));
 
-            var sampleObj = {
+            let sampleObj = {
                 SAMPLE: {
                   $: { alias: sampleAlias },
                   TITLE: sample.sample_name,
@@ -106,7 +106,7 @@ class ENA {
                 }
             };
 
-            var attrObj = [];
+            let attrObj = [];
             sample.sample_attrs.forEach(attr => {
                 attrObj.push({
                     SAMPLE_ATTRIBUTE: {
@@ -123,28 +123,27 @@ class ENA {
             sampleSetObj.SAMPLE_SET.push(sampleObj);
         });
 
-        var sampleXml = this.builder.buildObject(sampleSetObj);
-        return sampleXml;
+        return this.builder.buildObject(sampleSetObj);
     }
 
     generateExperimentAndRunXml(files, response) {
-        var self = this;
+        let self = this;
 
-        var experimentSetObj = { EXPERIMENT_SET: [] };
-        var runSetObj = { RUN_SET: [] };
+        let experimentSetObj = { EXPERIMENT_SET: [] };
+        let runSetObj = { RUN_SET: [] };
 
         response.RECEIPT.SAMPLE.forEach(sampleRes => {
-            var sampleAccession = sampleRes.$.accession;
-            var sampleAlias = sampleRes.$.alias;
-            var sample = self.samplesByAlias[sampleAlias];
+            let sampleAccession = sampleRes.$.accession;
+            let sampleAlias = sampleRes.$.alias;
+            let sample = self.samplesByAlias[sampleAlias];
 
             self.projectAccession = response.RECEIPT.PROJECT[0].$.accession;
             self.submissionAccession = response.RECEIPT.SUBMISSION[0].$.accession;
 
             // FIXME this code block repeated above
-            var attrs = {};
+            let attrs = {};
             sample.sample_attrs.forEach(attr => {
-                var key = attr.sample_attr_type.type.toLowerCase();
+                let key = attr.sample_attr_type.type.toLowerCase();
                 attrs[key] = attr.attr_value;
             });
             console.log(attrs);
@@ -162,8 +161,8 @@ class ENA {
             if (!attrs["platform_model"])
                 throw(new Error("Missing platform_model attribute for Sample '" + sample.sample_name + "'"));
 
-            var experimentAlias = "experiment_" + sample.sample_id + "_" + self.id;
-            var experimentObj = {
+            let experimentAlias = "experiment_" + sample.sample_id + "_" + self.id;
+            let experimentObj = {
                 EXPERIMENT: {
                   $: { alias: experimentAlias },
                   TITLE: "",
@@ -195,10 +194,10 @@ class ENA {
             experimentObj.EXPERIMENT.DESIGN.LIBRARY_DESCRIPTOR.LIBRARY_LAYOUT[attrs["library_layout"].toUpperCase()] = {}; // SINGLE or PAIRED
             experimentObj.EXPERIMENT.PLATFORM[attrs["platform_type"].toUpperCase()] = { INSTRUMENT_MODEL: attrs["platform_model"] };
 
-            var runsObj = [];
+            let runsObj = [];
             files.forEach(file => {
-                var runAlias = "run_" + sample.sample_id + "_" + runsObj.length + "_" + self.id;
-                //filesByAlias[runAlias] = file;
+                let runAlias = "run_" + sample.sample_id + "_" + runsObj.length + "_" + self.id;
+                //self.filesByAlias[runAlias] = file;
                 runsObj.push({
                     RUN: {
                       $: { alias: runAlias },
@@ -223,15 +222,15 @@ class ENA {
             runSetObj.RUN_SET = runsObj;
         });
 
-        var experimentXml = this.builder.buildObject(experimentSetObj);
-        var runXml = this.builder.buildObject(runSetObj);
+        let experimentXml = this.builder.buildObject(experimentSetObj);
+        let runXml = this.builder.buildObject(runSetObj);
         return [ experimentXml, runXml ];
     }
 
     async submitProject(submissionXml, projectXml, sampleXml) {
-        var self = this;
+        let self = this;
 
-        var options = {
+        let options = {
             method: "POST",
             uri: self.submissionUrl,
             headers: {
@@ -263,9 +262,9 @@ class ENA {
             }
         };
 
-        var parsedBody = await requestp(options);
+        let parsedBody = await requestp(options);
         console.log(parsedBody);
-        var response = await xmlToObj(parsedBody);
+        let response = await xmlToObj(parsedBody);
         console.log(response);
 
         if (response.RECEIPT.$.success == "false") {
@@ -286,9 +285,9 @@ class ENA {
     }
 
     async submitExperiments(submissionXml, experimentXml, runXml) {
-        var self = this;
+        let self = this;
 
-        var options2 = {
+        let options2 = {
             method: "POST",
             uri: self.submissionUrl,
             headers: {
@@ -320,9 +319,9 @@ class ENA {
             }
         };
 
-        var parsedBody = await requestp(options2);
+        let parsedBody = await requestp(options2);
         console.log(parsedBody);
-        var response = await xmlToObj(parsedBody);
+        let response = await xmlToObj(parsedBody);
 
         if (response.RECEIPT.$.success == "false") {
             if (response.RECEIPT.MESSAGES) {
@@ -340,8 +339,8 @@ class ENA {
 
 //      if (response.RECEIPT.RUN) {
 //          response.RECEIPT.RUN.forEach(run => {
-//              var alias = run.$.alias;
-//              var accession = run.$.accession;
+//              let alias = run.$.alias;
+//              let accession = run.$.accession;
 //              filesByAlias[alias].dataValues.accession = accession;
 //           });
 //      }
@@ -350,9 +349,9 @@ class ENA {
     }
 
     async submitRelease() {
-        var self = this;
+        let self = this;
 
-        var submissionXml = this.builder.buildObject({
+        let submissionXml = this.builder.buildObject({
             SUBMISSION: {
                 ACTIONS: {
                     ACTION: {
@@ -363,7 +362,7 @@ class ENA {
         });
         console.log(submissionXml);
 
-        var options2 = {
+        let options2 = {
             method: "POST",
             uri: self.submissionUrl,
             headers: {
@@ -380,9 +379,9 @@ class ENA {
                 }
             }
         };
-        var parsedBody = await requestp(options2);
+        let parsedBody = await requestp(options2);
         console.log(parsedBody);
-        var response = await xmlToObj(parsedBody);
+        let response = await xmlToObj(parsedBody);
         console.log(response);
 
         if (response.RECEIPT.$.success == "false") {

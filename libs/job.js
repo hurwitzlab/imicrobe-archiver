@@ -46,7 +46,7 @@ class Job {
     }
 
     async init() {
-        var self = this;
+        let self = this;
 
         const ebiConfig = config.ebiConfig;
         if (!ebiConfig)
@@ -64,20 +64,20 @@ class Job {
     }
 
     async stageInputs() {
-        var self = this;
+        let self = this;
 
         const ebi = config.ebiConfig;
 
         // Connect to ENA FTP
-        var ftp = new PromiseFtp();
-        var serverMsg = await ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password });
+        let ftp = new PromiseFtp();
+        let serverMsg = await ftp.connect({ host: ebi.hostUrl, user: ebi.username, password: ebi.password });
         console.log("ftp_connect:", serverMsg);
 
         // Get sequence files for all samples in project
-        var files = self.project.samples
+        let files = self.project.samples
             .reduce((acc, s) => acc.concat(s.sample_files), [])
             .filter(f => {
-                var file = f.file.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
+                let file = f.file.replace(/(.gz|.gzip|.bz2|.bzip2)$/, "");
                 return /(\.fasta|\.fastq|\.fa|\.fq)$/.test(file);
             });
         if (files.length == 0)
@@ -86,19 +86,19 @@ class Job {
         self.files = files;
 
         // Download files via Agave and FTP to ENA
-        var stagingPath = config.stagingPath + "/" + self.id;
+        let stagingPath = config.stagingPath + "/" + self.id;
         for (const f of self.files) {
-            var filepath = f.file;//.replace("/iplant/home", "");
+            let filepath = f.file;//.replace("/iplant/home", "");
 
             // Create temp dir
-            var localPath = stagingPath + path.dirname(filepath);
+            let localPath = stagingPath + path.dirname(filepath);
             await mkdirp(localPath);
 
             // Download file from Agave into local temp space
-            var localFile = stagingPath + filepath;
+            let localFile = stagingPath + filepath;
 
             // Convert file to FASTQ if necessary
-            var newFile = localFile;
+            let newFile = localFile;
             if (/(.fa|.fasta)$/.test(filepath)) {
                 newFile = newFile.replace(/(.fa|.fasta)$/, "") + ".fastq.gz";
                 await exec_cmd('iget -Tf ' + filepath + ' ' + localFile + ' && perl scripts/fasta_to_fastq.pl ' + localFile + ' | gzip --stdout > ' + newFile);
@@ -128,16 +128,16 @@ class Job {
             await ftp.put(newFile, path.basename(newFile));
         }
 
-        var list = await ftp.list(); // for debug
+        let list = await ftp.list(); // for debug
         console.log(list);
 
         await ftp.end();
     }
 
     async submit() {
-        var self = this;
+        let self = this;
 
-        var ebi = config.ebiConfig;
+        let ebi = config.ebiConfig;
 
         const submissionXml = this.ena.generateSubmissionXml(self.project);
         const projectXml = this.ena.generateProjectXml(self.project);
@@ -147,32 +147,32 @@ class Job {
         console.log(projectXml);
         console.log(sampleXml);
 
-        var response = await this.ena.submitProject(submissionXml, projectXml, sampleXml);
+        let response = await this.ena.submitProject(submissionXml, projectXml, sampleXml);
 
         console.log(response.RECEIPT.PROJECT);
         console.log(response.RECEIPT.SAMPLE);
 
-        var [ experimentXml, runXml ] = this.ena.generateExperimentAndRunXml(self.files, response);
+        let [ experimentXml, runXml ] = this.ena.generateExperimentAndRunXml(self.files, response);
 
         console.log(experimentXml);
         console.log(runXml);
 
-        var response = await this.ena.submitExperiments(submissionXml, experimentXml, runXml);
+        response = await this.ena.submitExperiments(submissionXml, experimentXml, runXml);
 
         console.log(response);
         console.log(response.RECEIPT.RUN);
 
-        var response = await this.ena.submitRelease();
+        response = await this.ena.submitRelease();
     }
 
     async finish() {
-        var self = this;
+        let self = this;
 
         if (!DEVELOPMENT) {
             await Promise.all([
                 self.files.map(f => {
-                    var prefix = self.submissionAccession.substring(0, 6);
-                    var ebiUrl = "ftp://ftp.sra.ebi.ac.uk/vol1/" + prefix + "/" + self.submissionAccession + "/fastq/" + path.basename(f.dataValues.newFile); // FIXME hardcoded base URL
+                    let prefix = self.submissionAccession.substring(0, 6);
+                    let ebiUrl = "ftp://ftp.sra.ebi.ac.uk/vol1/" + prefix + "/" + self.submissionAccession + "/fastq/" + path.basename(f.dataValues.newFile); // FIXME hardcoded base URL
                     return f.update({
                         file: ebiUrl
                     });
@@ -221,7 +221,7 @@ class JobManager {
     }
 
     async init() {
-        var self = this;
+        let self = this;
 
         console.log("JobManager.init");
 
@@ -244,7 +244,7 @@ class JobManager {
     }
 
     async getJob(id, username) {
-        var self = this;
+        let self = this;
 
         const job = await this.db.getJobBy(id);
 
@@ -255,7 +255,7 @@ class JobManager {
     }
 
     async getJobByProjectId(id, username) {
-        var self = this;
+        let self = this;
 
         const job = await this.db.getJobByProjectId(id);
 
@@ -266,8 +266,8 @@ class JobManager {
     }
 
     async getJobs(username) {
-        var self = this;
-        var jobs;
+        let self = this;
+        let jobs;
 
         if (username)
             jobs = await this.db.getJobsForUser(username);
@@ -278,7 +278,7 @@ class JobManager {
     }
 
     async getActiveJobs() {
-        var self = this;
+        let self = this;
 
         const jobs = await this.db.getActiveJobs();
 
@@ -328,7 +328,7 @@ class JobManager {
     }
 
     async runJob(job) {
-        var self = this;
+        let self = this;
 
         try {
             await self.transitionJob(job, STATUS.INITIALIZING);
@@ -348,22 +348,22 @@ class JobManager {
     }
 
     async update() {
-        var self = this;
+        let self = this;
 
-        var projects = await self.getPendingProjects();
+        let projects = await self.getPendingProjects();
         projects.forEach(
             async project => {
                 console.log("Submitting project ", project.project_id);
-                var job = new Job({ projectId: project.project_id });
+                let job = new Job({ projectId: project.project_id });
                 job.username = project.user.user_name;
                 self.submitJob(job);
             }
         );
 
         //console.log("Update ...")
-        var jobs = await self.getActiveJobs();
+        let jobs = await self.getActiveJobs();
         if (jobs && jobs.length) {
-            var numJobsRunning = jobs.reduce( (sum, value) => {
+            let numJobsRunning = jobs.reduce( (sum, value) => {
                 if (value.status == STATUS.RUNNING)
                     return sum + 1
                 else return sum;
