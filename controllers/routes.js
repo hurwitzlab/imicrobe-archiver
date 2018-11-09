@@ -28,20 +28,25 @@ module.exports = function(app, jobManager) {
     app.use(agaveTokenValidator);
 
     app.get('/jobs', async (request, response) => {
-        requireAuth(request);
+        try {
+            requireAuth(request);
 
-        var jobs = await jobManager.getJobs(request.auth.profile.username);
+            var jobs = await jobManager.getJobs(request.auth.profile.username);
 
-        response.json({
-            status: "success",
-            result: jobs || []
-        });
+            response.json({
+                status: "success",
+                result: jobs || []
+            });
+        }
+        catch(error) {
+            errorHandler(error, request, response);
+        }
     });
 
     app.get('/jobs/:id([\\w\\-]+)', async (request, response) => {
-        requireAuth(request);
-
         try {
+            requireAuth(request);
+
             var job = await jobManager.getJob(request.params.id, request.auth.profile.username);
             if (!job)
                 throw(ERR_NOT_FOUND);
@@ -57,9 +62,9 @@ module.exports = function(app, jobManager) {
     });
 
     app.get('/jobs/project/:id([\\w\\-]+)', async (request, response) => {
-        requireAuth(request);
-
         try {
+            requireAuth(request);
+
             var job = await jobManager.getJobByProjectId(request.params.id, request.auth.profile.username);
             if (!job)
                 throw(ERR_NOT_FOUND);
@@ -76,6 +81,8 @@ module.exports = function(app, jobManager) {
 
     app.get('/jobs/:id([\\w\\-]+)/history', async (request, response) => {
         try {
+            requireAuth(request);
+
             var job = await jobManager.getJob(request.params.id, request.auth.profile.username);
             if (!job)
                 throw(ERR_NOT_FOUND);
@@ -132,46 +139,42 @@ function requireAuth(req) {
         throw(ERR_UNAUTHORIZED);
 }
 
-function agaveTokenValidator(req, res, next) {
-    var token;
-    if (req && req.headers)
-        token = req.headers.authorization;
+async function agaveTokenValidator(req, res, next) {
+    var token = (req && req.headers) ? req.headers.authorization : null;
     console.log("validateAgaveToken: token:", token);
 
+    // Create auth object and default to unauthorized
     req.auth = {
         validToken: false
     };
 
-    if (!token)
-        next();
-    else {
-        getAgaveProfile(token)
-        .then(function (response) {
+    if (token) {
+        try {
+            var response = await getAgaveProfile(token);
             if (!response || response.status != "success") {
                 console.log('validateAgaveToken: !!!! Bad profile status: ' + response.status);
                 return;
             }
-            else {
-                response.result.token = token;
-                return response.result;
-            }
-        })
-        .then( profile => {
+
+            var profile = response.result;
             if (profile) {
                 console.log("validateAgaveToken: *** success ***  username:", profile.username);
 
+                // Add token to profile and add auth object to request
+                profile.token = token;
                 req.auth = {
                     validToken: true,
                     profile: profile
-
                 };
             }
-        })
-        .catch( error => {
+        }
+        catch(error) {
             console.log("validateAgaveToken: !!!!", error.message);
-        })
-        .finally(next);
+            return;
+        }
     }
+
+    next();
 }
 
 function getAgaveProfile(token) {

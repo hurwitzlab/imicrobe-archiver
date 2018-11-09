@@ -1,5 +1,6 @@
 {
     "serverPort": 3009,
+    "development": true,
     "dbFilePath": "./occ-plan-b.sqlite3",
     "ebiConfig" : {
         "username": "XXXXXXXX",

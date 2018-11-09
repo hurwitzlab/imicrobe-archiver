@@ -44,7 +44,7 @@ describe('Jobs', () => {
             .post('/jobs')
             .set('Authorization', 'Bearer ' + config.agaveConfig.testToken)
             .send({
-                projectId: 273
+                projectId: 285
             })
             .end((err, res) => {
                 res.should.have.status(200);
